@@ -1,6 +1,6 @@
 export type Todo = {
   id: string;
-  title: string;
-  is_complete: boolean;
+  text: string;
+  completed: boolean;
   created_at: string;
 };

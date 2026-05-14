@@ -1,82 +1,202 @@
 "use client";
 
 import { Check, Plus, Trash2 } from "lucide-react";
-import { useOptimistic, useRef, useTransition } from "react";
-import { addTodo, deleteTodo, toggleTodo } from "@/app/actions";
+import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
+import {
+  createTodo,
+  getTodos,
+  removeTodo,
+  updateTodoCompleted,
+} from "@/lib/todos";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import type { Todo } from "@/lib/types";
 
-type TodoPanelProps = {
-  initialTodos: Todo[];
-  isSupabaseConfigured: boolean;
-};
-
-type OptimisticAction =
-  | { type: "add"; title: string }
-  | { type: "toggle"; id: string; isComplete: boolean }
-  | { type: "delete"; id: string };
-
-export function TodoPanel({
-  initialTodos,
-  isSupabaseConfigured,
-}: TodoPanelProps) {
-  const formRef = useRef<HTMLFormElement>(null);
-  const [isPending, startTransition] = useTransition();
-  const [todos, applyOptimisticTodo] = useOptimistic(
-    initialTodos,
-    (state, action: OptimisticAction) => {
-      if (action.type === "add") {
-        return [
-          {
-            id: `draft-${action.title}-${Date.now()}`,
-            title: action.title,
-            is_complete: false,
-            created_at: new Date().toISOString(),
-          },
-          ...state,
-        ];
-      }
-
-      if (action.type === "toggle") {
-        return state.map((todo) =>
-          todo.id === action.id
-            ? { ...todo, is_complete: action.isComplete }
-            : todo,
-        );
-      }
-
-      return state.filter((todo) => todo.id !== action.id);
-    },
+function sortTodos(todos: Todo[]) {
+  return [...todos].sort(
+    (first, second) =>
+      new Date(second.created_at).getTime() -
+      new Date(first.created_at).getTime(),
   );
+}
+
+export function TodoPanel() {
+  const hasSupabaseConfig = isSupabaseConfigured();
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [newTodo, setNewTodo] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
+  const [isCreating, setIsCreating] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadTodos() {
+      if (!hasSupabaseConfig) {
+        setError(
+          "Supabase ist noch nicht verbunden. Bitte URL und Anon Key konfigurieren.",
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        setError(null);
+        const loadedTodos = await getTodos();
+
+        if (isMounted) {
+          setTodos(sortTodos(loadedTodos));
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "Todos konnten nicht geladen werden.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadTodos();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [hasSupabaseConfig]);
+
+  function setTodoPending(id: string, isPending: boolean) {
+    setPendingIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+
+      if (isPending) {
+        nextIds.add(id);
+      } else {
+        nextIds.delete(id);
+      }
+
+      return nextIds;
+    });
+  }
+
+  async function handleCreateTodo(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const text = newTodo.trim();
+
+    if (!text || isCreating || !hasSupabaseConfig) {
+      return;
+    }
+
+    try {
+      setIsCreating(true);
+      setError(null);
+      const createdTodo = await createTodo(text);
+      setTodos((currentTodos) => sortTodos([createdTodo, ...currentTodos]));
+      setNewTodo("");
+    } catch (createError) {
+      setError(
+        createError instanceof Error
+          ? createError.message
+          : "Todo konnte nicht erstellt werden.",
+      );
+    } finally {
+      setIsCreating(false);
+    }
+  }
+
+  async function handleToggleTodo(todo: Todo) {
+    if (pendingIds.has(todo.id)) {
+      return;
+    }
+
+    const nextCompleted = !todo.completed;
+
+    setTodoPending(todo.id, true);
+    setTodos((currentTodos) =>
+      currentTodos.map((currentTodo) =>
+        currentTodo.id === todo.id
+          ? { ...currentTodo, completed: nextCompleted }
+          : currentTodo,
+      ),
+    );
+
+    try {
+      setError(null);
+      const updatedTodo = await updateTodoCompleted(todo.id, nextCompleted);
+      setTodos((currentTodos) =>
+        sortTodos(
+          currentTodos.map((currentTodo) =>
+            currentTodo.id === todo.id ? updatedTodo : currentTodo,
+          ),
+        ),
+      );
+    } catch (updateError) {
+      setTodos((currentTodos) =>
+        currentTodos.map((currentTodo) =>
+          currentTodo.id === todo.id ? todo : currentTodo,
+        ),
+      );
+      setError(
+        updateError instanceof Error
+          ? updateError.message
+          : "Todo konnte nicht aktualisiert werden.",
+      );
+    } finally {
+      setTodoPending(todo.id, false);
+    }
+  }
+
+  async function handleDeleteTodo(todo: Todo) {
+    if (pendingIds.has(todo.id)) {
+      return;
+    }
+
+    setTodoPending(todo.id, true);
+    setTodos((currentTodos) =>
+      currentTodos.filter((currentTodo) => currentTodo.id !== todo.id),
+    );
+
+    try {
+      setError(null);
+      await removeTodo(todo.id);
+    } catch (deleteError) {
+      setTodos((currentTodos) => sortTodos([todo, ...currentTodos]));
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Todo konnte nicht geloescht werden.",
+      );
+    } finally {
+      setTodoPending(todo.id, false);
+    }
+  }
 
   return (
     <article className="rounded-[2rem] bg-panel/88 p-5 shadow-[0_18px_50px_rgba(97,66,42,0.10)] backdrop-blur sm:p-6">
       <form
-        ref={formRef}
-        action={async (formData) => {
-          const title = String(formData.get("title") ?? "").trim();
-
-          if (!title) {
-            return;
-          }
-
-          formRef.current?.reset();
-          startTransition(() => {
-            applyOptimisticTodo({ type: "add", title });
-          });
-          await addTodo(formData);
-        }}
+        onSubmit={handleCreateTodo}
         className="flex gap-2"
       >
         <input
-          name="title"
+          value={newTodo}
+          onChange={(event) => setNewTodo(event.target.value)}
           maxLength={160}
           placeholder="Neue Aufgabe"
-          disabled={!isSupabaseConfigured}
+          disabled={isCreating || isLoading || !hasSupabaseConfig}
           className="min-w-0 flex-1 rounded-2xl border border-line bg-white/50 px-4 py-3 text-sm text-foreground outline-none transition placeholder:text-muted/70 focus:border-accent focus:bg-white/72 disabled:cursor-not-allowed disabled:opacity-60"
         />
         <button
           type="submit"
-          disabled={!isSupabaseConfigured}
+          disabled={
+            isCreating || isLoading || !hasSupabaseConfig || !newTodo.trim()
+          }
           className="grid size-12 shrink-0 place-items-center rounded-2xl bg-accent text-white shadow-[0_12px_24px_rgba(156,99,62,0.20)] transition hover:bg-accent-strong focus:outline-none focus:ring-2 focus:ring-accent-strong/35 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-accent"
           aria-label="Aufgabe hinzufuegen"
           title="Aufgabe hinzufuegen"
@@ -86,66 +206,67 @@ export function TodoPanel({
       </form>
 
       <div className="mt-4 min-h-44 space-y-2">
-        {todos.length > 0
+        {error ? (
+          <div className="rounded-2xl bg-panel-soft/70 px-4 py-3 text-sm leading-6 text-accent-strong">
+            {error}
+          </div>
+        ) : null}
+
+        {isLoading ? (
+          <div className="space-y-2">
+            <div className="h-14 rounded-2xl bg-white/28" />
+            <div className="h-14 rounded-2xl bg-white/22" />
+          </div>
+        ) : null}
+
+        {!isLoading
           ? todos.map((todo) => (
             <div
               key={todo.id}
-              className="group flex items-center gap-3 rounded-2xl bg-white/34 px-3 py-3 transition hover:bg-white/52"
+              className={`group flex items-center gap-3 rounded-2xl bg-white/34 px-3 py-3 transition hover:bg-white/52 ${
+                todo.completed ? "opacity-60" : ""
+              }`}
             >
               <button
                 type="button"
                 className={`grid size-9 shrink-0 place-items-center rounded-xl border transition ${
-                  todo.is_complete
+                  todo.completed
                     ? "border-success bg-success text-white"
                     : "border-line bg-panel text-muted hover:border-accent"
                 }`}
                 aria-label={
-                  todo.is_complete
+                  todo.completed
                     ? "Aufgabe als offen markieren"
                     : "Aufgabe abschliessen"
                 }
                 title={
-                  todo.is_complete
+                  todo.completed
                     ? "Aufgabe als offen markieren"
                     : "Aufgabe abschliessen"
                 }
-                disabled={isPending || todo.id.startsWith("draft-")}
-                onClick={() => {
-                  startTransition(() => {
-                    applyOptimisticTodo({
-                      type: "toggle",
-                      id: todo.id,
-                      isComplete: !todo.is_complete,
-                    });
-                  });
-                  void toggleTodo(todo.id, !todo.is_complete);
-                }}
+                disabled={pendingIds.has(todo.id)}
+                onClick={() => void handleToggleTodo(todo)}
               >
-                {todo.is_complete ? (
+                {todo.completed ? (
                   <Check size={17} aria-hidden="true" />
                 ) : null}
               </button>
               <p
                 className={`min-w-0 flex-1 text-sm leading-6 ${
-                  todo.is_complete
+                  todo.completed
                     ? "text-muted line-through decoration-accent-strong/45"
                     : "text-foreground"
                 }`}
               >
-                {todo.title}
+                {todo.text}
               </p>
               <button
                 type="button"
                 className="grid size-9 shrink-0 place-items-center rounded-xl text-muted opacity-0 transition hover:bg-panel-soft hover:text-accent-strong focus:opacity-100 group-hover:opacity-100"
                 aria-label="Aufgabe loeschen"
                 title="Aufgabe loeschen"
-                disabled={isPending || todo.id.startsWith("draft-")}
-                onClick={() => {
-                  startTransition(() => {
-                    applyOptimisticTodo({ type: "delete", id: todo.id });
-                  });
-                  void deleteTodo(todo.id);
-                }}
+                disabled={pendingIds.has(todo.id)}
+                onClick={() => void handleDeleteTodo(todo)}
               >
                 <Trash2 size={17} aria-hidden="true" />
               </button>

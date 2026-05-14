@@ -1,6 +1,34 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { Todo } from "@/lib/types";
 
-let supabase: SupabaseClient | null = null;
+type Database = {
+  public: {
+    Tables: {
+      todos: {
+        Row: Todo;
+        Insert: {
+          id?: string;
+          text: string;
+          completed?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          text?: string;
+          completed?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+    };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
+  };
+};
+
+let supabase: SupabaseClient<Database> | null = null;
 
 export function isSupabaseConfigured() {
   return Boolean(
