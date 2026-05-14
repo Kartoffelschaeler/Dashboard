@@ -39,9 +39,7 @@ body {
   min-height: 100vh;
   margin: 0;
   color: var(--foreground);
-  background:
-    radial-gradient(circle at top left, rgba(255, 250, 243, 0.92), transparent 34rem),
-    linear-gradient(135deg, #f8efe4 0%, #f4e2d0 44%, #ead0ba 100%);
+  background: linear-gradient(135deg, #f8efe4 0%, #f4e2d0 100%);
   font-family: var(--font-sans);
 }
 

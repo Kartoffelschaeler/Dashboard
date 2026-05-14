@@ -48,22 +48,8 @@ export function TodoPanel({
     },
   );
 
-  const openTodos = todos.filter((todo) => !todo.is_complete).length;
-
   return (
-    <article className="rounded-[2rem] border border-white/60 bg-panel/82 p-5 shadow-[0_18px_60px_rgba(97,66,42,0.10)] backdrop-blur sm:p-6">
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
-        <div>
-          <p className="text-sm font-medium text-muted">Supabase Todos</p>
-          <h2 className="mt-2 text-2xl font-semibold text-foreground">
-            Aufgaben
-          </h2>
-        </div>
-        <div className="rounded-2xl bg-panel-soft px-4 py-2 text-sm font-semibold text-accent-strong">
-          {openTodos} offen
-        </div>
-      </div>
-
+    <article className="rounded-[2rem] bg-panel/88 p-5 shadow-[0_18px_50px_rgba(97,66,42,0.10)] backdrop-blur sm:p-6">
       <form
         ref={formRef}
         action={async (formData) => {
@@ -79,7 +65,7 @@ export function TodoPanel({
           });
           await addTodo(formData);
         }}
-        className="mt-6 flex gap-2"
+        className="flex gap-2"
       >
         <input
           name="title"
@@ -99,23 +85,12 @@ export function TodoPanel({
         </button>
       </form>
 
-      <div className="mt-5 space-y-3">
-        {!isSupabaseConfigured ? (
-          <div className="rounded-2xl border border-line bg-panel-soft/65 px-4 py-4 text-sm leading-6 text-accent-strong">
-            Supabase ist noch nicht konfiguriert. Trage URL und Anon Key in
-            `.env.local` ein, dann wird die Todo-Liste aktiv.
-          </div>
-        ) : null}
-        {todos.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-line bg-white/30 px-4 py-5 text-sm leading-6 text-muted">
-            Noch keine Aufgaben. Sobald Supabase verbunden ist, erscheinen neue
-            Eintraege hier dauerhaft.
-          </div>
-        ) : (
-          todos.map((todo) => (
+      <div className="mt-4 min-h-44 space-y-2">
+        {todos.length > 0
+          ? todos.map((todo) => (
             <div
               key={todo.id}
-              className="flex items-center gap-3 rounded-2xl border border-line/85 bg-white/38 px-3 py-3"
+              className="group flex items-center gap-3 rounded-2xl bg-white/34 px-3 py-3 transition hover:bg-white/52"
             >
               <button
                 type="button"
@@ -146,7 +121,9 @@ export function TodoPanel({
                   void toggleTodo(todo.id, !todo.is_complete);
                 }}
               >
-                {todo.is_complete ? <Check size={17} aria-hidden="true" /> : null}
+                {todo.is_complete ? (
+                  <Check size={17} aria-hidden="true" />
+                ) : null}
               </button>
               <p
                 className={`min-w-0 flex-1 text-sm leading-6 ${
@@ -159,7 +136,7 @@ export function TodoPanel({
               </p>
               <button
                 type="button"
-                className="grid size-9 shrink-0 place-items-center rounded-xl text-muted transition hover:bg-panel-soft hover:text-accent-strong"
+                className="grid size-9 shrink-0 place-items-center rounded-xl text-muted opacity-0 transition hover:bg-panel-soft hover:text-accent-strong focus:opacity-100 group-hover:opacity-100"
                 aria-label="Aufgabe loeschen"
                 title="Aufgabe loeschen"
                 disabled={isPending || todo.id.startsWith("draft-")}
@@ -174,7 +151,7 @@ export function TodoPanel({
               </button>
             </div>
           ))
-        )}
+          : null}
       </div>
     </article>
   );
