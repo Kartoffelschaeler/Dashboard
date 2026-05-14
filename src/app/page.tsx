@@ -1,6 +1,6 @@
 import { ChatPlaceholder } from "@/components/chat-placeholder";
 import { ClockCard } from "@/components/clock-card";
-import { TodoPanel } from "@/components/todo-panel";
+import { ProtectedSection } from "@/components/protected-section";
 
 export default function Home() {
   return (
@@ -8,7 +8,7 @@ export default function Home() {
       <div className="mx-auto grid w-full max-w-6xl gap-5">
         <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
           <ClockCard />
-          <TodoPanel />
+          <ProtectedSection />
         </section>
 
         <ChatPlaceholder />
