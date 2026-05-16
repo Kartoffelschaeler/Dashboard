@@ -58,9 +58,9 @@ Das Dashboard bleibt ruhig und fokussiert:
 
 - links: Zeit, Datum und Kalender-Icon
 - rechts: Zentrale für Aufgaben und kurze Einträge
-- darunter: vorbereiteter Chat-Platzhalter
+- darunter: erster kontrollierter Agent-Chat
 - Kalender nur als Modal über das Icon
-- kleine Google-Kalender-Karte im entsperrten Bereich
+- Google-Hinweise nur, wenn eine Aktion nötig ist
 
 ## Services
 
@@ -99,9 +99,33 @@ Tasks und lokale Kalendertermine laufen im Frontend über geschützte API-Routen
 
 Nach dem Unlock setzt der Server ein signiertes `httpOnly` Cookie mit begrenzter Laufzeit. `localStorage` wird nur für UI-Komfort verwendet und entscheidet nicht über Datenzugriff.
 
-## Agent-Vorbereitung
+## Agent
 
-Noch keine echte KI ist eingebaut. Vorbereitet sind:
+Der erste Agent ist eine kontrollierte Chat-Integration:
+
+```txt
+Frontend Chat UI
+→ POST /api/agent
+→ Agent Runtime
+→ Tool Router
+→ Agent Tools
+→ Domain Services
+→ Supabase / Google Calendar
+```
+
+OpenAI wird ausschließlich serverseitig über `OPENAI_API_KEY` genutzt. Der Schlüssel darf niemals als `NEXT_PUBLIC_` Variable angelegt werden. Falls `AGENT_MODEL` leer ist, nutzt die Runtime ein kleines Tool-Calling-fähiges Standardmodell.
+
+Aktivierte Tools:
+
+- `system.getCurrentDate`
+- `tasks.getOpenTasks`
+- `tasks.createTask`
+- `calendar.getUpcomingEvents`
+- `calendar.createEvent`
+
+Nicht aktiviert sind Löschen, Verschieben, Bearbeiten persönlicher Kalender, Memory-Schreibzugriffe, Hintergrundjobs oder autonome Planung. Die Runtime begrenzt Requests auf wenige Schritte und Tool Calls.
+
+Vorbereitet sind außerdem:
 
 - `src/lib/agent/tools/create-task-tool.ts`
 - `src/lib/agent/tools/create-event-tool.ts`
@@ -114,9 +138,9 @@ Noch keine echte KI ist eingebaut. Vorbereitet sind:
 - `src/lib/agent/memory/agent-memory.ts`
 - `src/lib/agent/memory/conversation-store.ts`
 
-Der spätere Agent soll nicht getrennt vom Dashboard arbeiten, sondern diese Tools nutzen, um Aufgaben und Termine über dieselbe Datenlogik zu lesen oder zu verändern.
+Der Agent arbeitet nicht direkt mit Supabase, Google APIs, Tokens oder Secrets. Alle Aktionen laufen über kontrollierte serverseitige Tools und Services.
 
-Google-Schreibzugriffe sind in den vorbereiteten Tools und Services auf den Kalender aus `GOOGLE_AGENT_CALENDAR_NAME` begrenzt. Persönliche Kalender können gelesen werden, sind aber kein Schreibziel.
+Google-Schreibzugriffe sind in Tools und Services auf den Kalender aus `GOOGLE_AGENT_CALENDAR_NAME` begrenzt. Persönliche Kalender können gelesen werden, sind aber kein Schreibziel.
 
 ## Typen
 
@@ -139,6 +163,7 @@ Aktuell verwendet:
 - `todos`
 - `calendar_events`
 - `calendar_connections`
+- `agent_action_logs`
 
 Kalender-Tabelle:
 
@@ -174,6 +199,8 @@ create unique index if not exists calendar_connections_provider_key
 
 alter table public.calendar_connections enable row level security;
 ```
+
+Agent Tool Calls werden minimal in `agent_action_logs` protokolliert: Tool-Name, Status, Risikostufe und Zeitstempel. Es werden keine Tokens und keine vollständigen Google Responses geloggt.
 
 ## Google Calendar
 

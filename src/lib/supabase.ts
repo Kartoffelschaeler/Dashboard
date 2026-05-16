@@ -66,6 +66,36 @@ type Database = {
         };
         Relationships: [];
       };
+      agent_action_logs: {
+        Row: {
+          id: string;
+          conversation_id: string | null;
+          tool_name: string;
+          tool_input_summary: string | null;
+          status: string;
+          risk_level: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id?: string | null;
+          tool_name: string;
+          tool_input_summary?: string | null;
+          status: string;
+          risk_level: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string | null;
+          tool_name?: string;
+          tool_input_summary?: string | null;
+          status?: string;
+          risk_level?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

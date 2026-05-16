@@ -28,6 +28,16 @@ create table if not exists public.calendar_connections (
 create unique index if not exists calendar_connections_provider_key
   on public.calendar_connections(provider);
 
+create table if not exists public.agent_action_logs (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id text,
+  tool_name text not null,
+  tool_input_summary text,
+  status text not null,
+  risk_level text not null,
+  created_at timestamp with time zone default now()
+);
+
 do $$
 begin
   if exists (
@@ -68,6 +78,8 @@ alter table public.todos enable row level security;
 alter table public.calendar_events enable row level security;
 
 alter table public.calendar_connections enable row level security;
+
+alter table public.agent_action_logs enable row level security;
 
 drop policy if exists "Allow public read access" on public.todos;
 drop policy if exists "Allow public insert access" on public.todos;
