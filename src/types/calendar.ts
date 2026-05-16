@@ -12,8 +12,12 @@ export type CalendarEventSource = "local" | "google";
 
 export type CalendarDisplayEvent = CalendarEvent & {
   source: CalendarEventSource;
+  externalEventId?: string;
   calendarId?: string;
   calendarName?: string;
+  calendarColor?: string;
+  isAgentCalendar?: boolean;
+  canEdit?: boolean;
   canDelete?: boolean;
 };
 

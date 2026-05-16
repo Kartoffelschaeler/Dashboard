@@ -116,7 +116,7 @@ Noch keine echte KI ist eingebaut. Vorbereitet sind:
 
 Der spätere Agent soll nicht getrennt vom Dashboard arbeiten, sondern diese Tools nutzen, um Aufgaben und Termine über dieselbe Datenlogik zu lesen oder zu verändern.
 
-Google-Schreibzugriffe sind in den vorbereiteten Tools auf den Kalender aus `GOOGLE_AGENT_CALENDAR_NAME` begrenzt. Persönliche Kalender werden gelesen, aber nicht als Schreibziel vorbereitet.
+Google-Schreibzugriffe sind in den vorbereiteten Tools und Services auf den Kalender aus `GOOGLE_AGENT_CALENDAR_NAME` begrenzt. Persönliche Kalender können gelesen werden, sind aber kein Schreibziel.
 
 ## Typen
 
@@ -183,6 +183,10 @@ In Google Cloud muss der OAuth Client als Redirect URI denselben Wert haben wie 
 http://localhost:3000/api/auth/google/callback
 ```
 
-Nach dem Entsperren erscheint eine kleine Karte „Google Kalender“. Der Button startet den OAuth Flow. Danach werden Kalender gelesen und Google-Termine im bestehenden Kalender-Modal als dezente Punkte zusammen mit lokalen Terminen angezeigt.
+Nach dem Entsperren erscheint nur dann ein Google-Hinweis, wenn etwas zu tun ist: nicht verbunden, Token-/Statusproblem oder Agent-Kalender nicht gefunden. Wenn alles funktioniert, bleibt das normale Dashboard ruhig und Google-Termine erscheinen nur im Kalender-Modal.
 
-Der Kalender mit dem Namen aus `GOOGLE_AGENT_CALENDAR_NAME` ist der vorbereitete Schreib-Kalender für spätere Agent-Funktionen. Er sollte im Google Konto existieren, zum Beispiel `Dashboard Agent`.
+Der Kalender mit dem Namen aus `GOOGLE_AGENT_CALENDAR_NAME` ist der vorbereitete Schreib-Kalender für spätere Agent-Funktionen. Der Name wird exakt verglichen, Leerzeichen am Rand werden ignoriert. Er sollte im Google Konto existieren, zum Beispiel `Dashboard Agent`.
+
+Der spätere Agent darf alle verbundenen Google-Kalender lesen, aber Termine nur im Agent-Kalender erstellen, ändern oder löschen. Diese Regel liegt serverseitig in den Google-Calendar-Services.
+
+Im Kalender-Modal werden lokale Termine und Google-Termine als ruhige Farbpunkte angezeigt. Jeder Google-Kalender bekommt eine stabile Pastellfarbe, der Agent-Kalender eine eigene dezente Farbe.

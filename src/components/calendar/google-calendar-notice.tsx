@@ -2,22 +2,19 @@
 
 import { CalendarDays } from "lucide-react";
 import { useEffect, useState } from "react";
+import type { GoogleCalendarWarning } from "@/types/google-calendar";
 
 type CalendarStatus = {
   connected: boolean;
-  calendars: Array<{
-    id: string;
-    summary: string;
-    primary: boolean;
-  }>;
   agentCalendarName: string | null;
   agentCalendar: {
     id: string;
     summary: string;
   } | null;
+  warnings?: GoogleCalendarWarning[];
 };
 
-export function GoogleCalendarCard() {
+export function GoogleCalendarNotice() {
   const [status, setStatus] = useState<CalendarStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -33,7 +30,7 @@ export function GoogleCalendarCard() {
         const response = await fetch("/api/calendar/status");
 
         if (!response.ok) {
-          throw new Error("Status nicht verfügbar.");
+          throw new Error("Google Kalender braucht Aufmerksamkeit.");
         }
 
         const data = (await response.json()) as CalendarStatus;
@@ -46,7 +43,7 @@ export function GoogleCalendarCard() {
           setError(
             loadError instanceof Error
               ? loadError.message
-              : "Google Kalender konnte nicht geladen werden.",
+              : "Google Kalender braucht Aufmerksamkeit.",
           );
         }
       } finally {
@@ -63,9 +60,19 @@ export function GoogleCalendarCard() {
     };
   }, []);
 
+  if (isLoading) {
+    return null;
+  }
+
+  const warning = error ?? status?.warnings?.[0]?.message ?? null;
+
+  if (status?.connected && !warning) {
+    return null;
+  }
+
   return (
-    <article className="rounded-[1.75rem] bg-panel/76 p-4 shadow-[0_16px_40px_rgba(97,66,42,0.08)] backdrop-blur">
-      <div className="flex items-start justify-between gap-3">
+    <article className="rounded-[1.75rem] bg-panel/72 p-4 shadow-[0_16px_40px_rgba(97,66,42,0.07)] backdrop-blur">
+      <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <CalendarDays size={16} className="text-accent" aria-hidden="true" />
@@ -73,16 +80,12 @@ export function GoogleCalendarCard() {
               Google Kalender
             </p>
           </div>
-          <p className="mt-1 text-xs text-muted">
-            {isLoading
-              ? "lädt"
-              : status?.connected
-                ? "verbunden"
-                : "nicht verbunden"}
+          <p className="mt-1 text-xs leading-5 text-muted">
+            {warning ?? "Noch nicht verbunden."}
           </p>
         </div>
 
-        {!status?.connected && !isLoading ? (
+        {!status?.connected ? (
           <button
             type="button"
             onClick={() => {
@@ -94,30 +97,6 @@ export function GoogleCalendarCard() {
           </button>
         ) : null}
       </div>
-
-      {error ? (
-        <p className="mt-3 rounded-2xl bg-panel-soft/65 px-3 py-2 text-xs leading-5 text-accent-strong">
-          {error}
-        </p>
-      ) : null}
-
-      {status?.connected ? (
-        <div className="mt-3 space-y-1.5">
-          {status.calendars.slice(0, 3).map((calendar) => (
-            <p
-              key={calendar.id}
-              className="truncate rounded-xl bg-white/26 px-3 py-2 text-xs text-muted"
-            >
-              {calendar.summary}
-            </p>
-          ))}
-          {status.agentCalendarName ? (
-            <p className="pt-1 text-xs text-muted/80">
-              Agent: {status.agentCalendar?.summary ?? status.agentCalendarName}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
     </article>
   );
 }

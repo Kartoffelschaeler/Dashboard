@@ -1,6 +1,9 @@
 import { requireDashboardAccess } from "@/lib/server/dashboard-auth";
 import { getGoogleConnection } from "@/lib/services/google-calendar-auth-service";
-import { getGoogleEventsWithWarnings } from "@/lib/services/google-calendar-service";
+import {
+  createGoogleEvent,
+  getGoogleEventsWithWarnings,
+} from "@/lib/services/google-calendar-service";
 
 export async function GET(request: Request) {
   const accessError = requireDashboardAccess(request);
@@ -42,6 +45,47 @@ export async function GET(request: Request) {
             ? error.message
             : "Google Termine konnten nicht geladen werden.",
       },
+      { status: 500 },
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  const accessError = requireDashboardAccess(request);
+
+  if (accessError) {
+    return accessError;
+  }
+
+  try {
+    const body = (await request.json()) as {
+      title?: unknown;
+      description?: unknown;
+      startDate?: unknown;
+      endDate?: unknown;
+      allDay?: unknown;
+    };
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    const startDate =
+      typeof body.startDate === "string" ? body.startDate : "";
+
+    if (!title || !startDate) {
+      return Response.json({ error: "Ungültiger Termin." }, { status: 400 });
+    }
+
+    const event = await createGoogleEvent({
+      title,
+      description:
+        typeof body.description === "string" ? body.description : null,
+      startDate,
+      endDate: typeof body.endDate === "string" ? body.endDate : null,
+      allDay: typeof body.allDay === "boolean" ? body.allDay : false,
+    });
+
+    return Response.json({ event }, { status: 201 });
+  } catch {
+    return Response.json(
+      { error: "Google Termin konnte nicht erstellt werden." },
       { status: 500 },
     );
   }

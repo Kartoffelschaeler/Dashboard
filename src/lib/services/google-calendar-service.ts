@@ -12,14 +12,21 @@ type GoogleCalendarListResponse = {
 };
 
 type GoogleEventsResponse = {
-  items?: Array<{
-    id: string;
-    summary?: string;
-    description?: string;
-    start?: { date?: string; dateTime?: string; timeZone?: string };
-    end?: { date?: string; dateTime?: string; timeZone?: string };
-    htmlLink?: string;
-  }>;
+  items?: GoogleEventResponse[];
+};
+
+type GoogleEventResponse = {
+  id: string;
+  summary?: string;
+  description?: string;
+  start?: { date?: string; dateTime?: string; timeZone?: string };
+  end?: { date?: string; dateTime?: string; timeZone?: string };
+  htmlLink?: string;
+};
+
+type AgentCalendarResult = {
+  calendar: GoogleCalendar | null;
+  warning: GoogleCalendarWarning | null;
 };
 
 const googleCalendarApiUrl = "https://www.googleapis.com/calendar/v3";
@@ -65,16 +72,58 @@ export async function getGoogleCalendars() {
   return data.items ?? [];
 }
 
-export async function getAgentCalendar() {
-  const calendarName = process.env.GOOGLE_AGENT_CALENDAR_NAME;
+export function findAgentCalendar(
+  calendars: GoogleCalendar[],
+): AgentCalendarResult {
+  const calendarName = process.env.GOOGLE_AGENT_CALENDAR_NAME?.trim();
 
   if (!calendarName) {
-    return null;
+    return {
+      calendar: null,
+      warning: {
+        calendarId: "agent-calendar",
+        message: "Agent-Kalender ist nicht konfiguriert.",
+      },
+    };
   }
 
+  const calendar =
+    calendars.find((item) => item.summary.trim() === calendarName) ?? null;
+
+  return {
+    calendar,
+    warning: calendar
+      ? null
+      : {
+        calendarId: "agent-calendar",
+        calendarSummary: calendarName,
+        message: "Agent-Kalender wurde nicht gefunden.",
+      },
+  };
+}
+
+function mapGoogleEvent(
+  calendar: GoogleCalendar,
+  event: GoogleEventResponse,
+  isAgentCalendar: boolean,
+): GoogleCalendarEvent {
+  return {
+    id: event.id,
+    calendarId: calendar.id,
+    calendarSummary: calendar.summary,
+    isAgentCalendar,
+    summary: event.summary ?? "Ohne Titel",
+    description: event.description ?? null,
+    start: event.start ?? {},
+    end: event.end ?? {},
+    htmlLink: event.htmlLink,
+  };
+}
+
+export async function getAgentCalendar() {
   const calendars = await getGoogleCalendars();
 
-  return calendars.find((calendar) => calendar.summary === calendarName) ?? null;
+  return findAgentCalendar(calendars);
 }
 
 export async function getGoogleEvents(rangeStart: Date, rangeEnd: Date) {
@@ -88,6 +137,7 @@ export async function getGoogleEventsWithWarnings(
   rangeEnd: Date,
 ) {
   const calendars = await getGoogleCalendars();
+  const agentCalendar = findAgentCalendar(calendars).calendar;
   const eventGroups = await Promise.allSettled(
     calendars.map(async (calendar) => {
       const params = new URLSearchParams({
@@ -100,16 +150,9 @@ export async function getGoogleEventsWithWarnings(
         `/calendars/${encodeURIComponent(calendar.id)}/events?${params}`,
       );
 
-      return (data.items ?? []).map<GoogleCalendarEvent>((event) => ({
-        id: event.id,
-        calendarId: calendar.id,
-        calendarSummary: calendar.summary,
-        summary: event.summary ?? "Ohne Titel",
-        description: event.description ?? null,
-        start: event.start ?? {},
-        end: event.end ?? {},
-        htmlLink: event.htmlLink,
-      }));
+      return (data.items ?? []).map((event) =>
+        mapGoogleEvent(calendar, event, agentCalendar?.id === calendar.id),
+      );
     }),
   );
   const events: GoogleCalendarEvent[] = [];
@@ -137,7 +180,7 @@ export async function getGoogleEventsWithWarnings(
 }
 
 export async function createGoogleEvent(input: CreateGoogleEventInput) {
-  const calendar = await getAgentCalendar();
+  const { calendar } = await getAgentCalendar();
 
   if (!calendar) {
     throw createServiceError("Agent-Kalender wurde nicht gefunden.");
@@ -145,26 +188,28 @@ export async function createGoogleEvent(input: CreateGoogleEventInput) {
 
   const body = createGoogleEventBody(input);
 
-  return googleFetch<GoogleCalendarEvent>(
+  const event = await googleFetch<GoogleEventResponse>(
     `/calendars/${encodeURIComponent(calendar.id)}/events`,
     {
       method: "POST",
       body: JSON.stringify(body),
     },
   );
+
+  return mapGoogleEvent(calendar, event, true);
 }
 
 export async function updateGoogleEvent(
   eventId: string,
   input: CreateGoogleEventInput,
 ) {
-  const calendar = await getAgentCalendar();
+  const { calendar } = await getAgentCalendar();
 
   if (!calendar) {
     throw createServiceError("Agent-Kalender wurde nicht gefunden.");
   }
 
-  return googleFetch<GoogleCalendarEvent>(
+  const event = await googleFetch<GoogleEventResponse>(
     `/calendars/${encodeURIComponent(calendar.id)}/events/${encodeURIComponent(
       eventId,
     )}`,
@@ -173,10 +218,12 @@ export async function updateGoogleEvent(
       body: JSON.stringify(createGoogleEventBody(input)),
     },
   );
+
+  return mapGoogleEvent(calendar, event, true);
 }
 
 export async function deleteGoogleEvent(eventId: string) {
-  const calendar = await getAgentCalendar();
+  const { calendar } = await getAgentCalendar();
 
   if (!calendar) {
     throw createServiceError("Agent-Kalender wurde nicht gefunden.");

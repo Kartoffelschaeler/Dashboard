@@ -1,6 +1,9 @@
 import { requireDashboardAccess } from "@/lib/server/dashboard-auth";
 import { getGoogleConnection } from "@/lib/services/google-calendar-auth-service";
-import { getGoogleCalendars } from "@/lib/services/google-calendar-service";
+import {
+  findAgentCalendar,
+  getGoogleCalendars,
+} from "@/lib/services/google-calendar-service";
 
 export async function GET(request: Request) {
   const accessError = requireDashboardAccess(request);
@@ -17,10 +20,7 @@ export async function GET(request: Request) {
     }
 
     const calendars = await getGoogleCalendars();
-    const agentCalendarName = process.env.GOOGLE_AGENT_CALENDAR_NAME ?? null;
-    const agentCalendar =
-      calendars.find((calendar) => calendar.summary === agentCalendarName) ??
-      null;
+    const { calendar: agentCalendar, warning } = findAgentCalendar(calendars);
 
     return Response.json({
       calendars: calendars.map((calendar) => ({
@@ -31,6 +31,7 @@ export async function GET(request: Request) {
       agentCalendar: agentCalendar
         ? { id: agentCalendar.id, summary: agentCalendar.summary }
         : null,
+      warnings: warning ? [warning] : [],
     });
   } catch (error) {
     return Response.json(

@@ -25,6 +25,7 @@ export type GoogleCalendarEvent = {
   id: string;
   calendarId: string;
   calendarSummary?: string;
+  isAgentCalendar?: boolean;
   summary: string;
   description?: string | null;
   start: GoogleEventDate;

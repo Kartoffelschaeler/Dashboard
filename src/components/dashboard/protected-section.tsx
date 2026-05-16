@@ -1,7 +1,7 @@
 "use client";
 
 import { useDashboard } from "@/components/dashboard/dashboard-context";
-import { GoogleCalendarCard } from "@/components/calendar/google-calendar-card";
+import { GoogleCalendarNotice } from "@/components/calendar/google-calendar-notice";
 import { UnlockCard } from "@/components/dashboard/unlock-card";
 import { CentralPanel } from "@/components/tasks/central-panel";
 
@@ -24,7 +24,7 @@ export function ProtectedSection() {
   return (
     <div className="grid gap-3">
       <CentralPanel />
-      <GoogleCalendarCard />
+      <GoogleCalendarNotice />
     </div>
   );
 }

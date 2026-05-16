@@ -33,6 +33,7 @@ import {
   getMonthLabel,
   weekDayLabels,
 } from "@/lib/utils/calendar-utils";
+import { getCalendarColor } from "@/lib/utils/calendar-colors";
 
 type CalendarModalProps = {
   onClose: () => void;
@@ -50,6 +51,9 @@ function localEventToDisplayEvent(event: CalendarEvent): CalendarDisplayEvent {
   return {
     ...event,
     source: "local",
+    calendarName: "Lokal",
+    calendarColor: getCalendarColor(undefined, "Lokal", "local"),
+    canEdit: true,
     canDelete: true,
   };
 }
@@ -80,6 +84,7 @@ function googleEventToDisplayEvent(
 
   return {
     id: `google:${event.calendarId}:${event.id}`,
+    externalEventId: event.id,
     title: event.summary,
     description: event.description ?? null,
     start_date: startDate,
@@ -89,8 +94,30 @@ function googleEventToDisplayEvent(
     source: "google",
     calendarId: event.calendarId,
     calendarName: event.calendarSummary,
-    canDelete: false,
+    calendarColor: getCalendarColor(
+      event.calendarId,
+      event.calendarSummary,
+      "google",
+      event.isAgentCalendar === true,
+    ),
+    isAgentCalendar: event.isAgentCalendar === true,
+    canEdit: event.isAgentCalendar === true,
+    canDelete: event.isAgentCalendar === true,
   };
+}
+
+function getDayEventDots(events: CalendarDisplayEvent[]) {
+  const dots = new Map<string, string>();
+
+  events.forEach((event) => {
+    const key = `${event.source}:${event.calendarId ?? event.calendarName ?? "local"}`;
+
+    if (!dots.has(key)) {
+      dots.set(key, event.calendarColor ?? getCalendarColor());
+    }
+  });
+
+  return [...dots.values()].slice(0, 4);
 }
 
 export function CalendarModal({ onClose }: CalendarModalProps) {
@@ -274,7 +301,7 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
   }
 
   async function handleDeleteEvent(event: CalendarDisplayEvent) {
-    if (event.source !== "local" || pendingDeleteIds.has(event.id)) {
+    if (!event.canEdit || !event.canDelete || pendingDeleteIds.has(event.id)) {
       return;
     }
 
@@ -285,7 +312,20 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
 
     try {
       setError(null);
-      await deleteEvent(event.id);
+      if (event.source === "google") {
+        await fetch(
+          `/api/calendar/events/${encodeURIComponent(
+            event.externalEventId ?? event.id,
+          )}`,
+          { method: "DELETE" },
+        ).then((response) => {
+          if (!response.ok) {
+            throw new Error("Termin konnte nicht gelöscht werden.");
+          }
+        });
+      } else {
+        await deleteEvent(event.id);
+      }
 
       if (selectedEvent?.id === event.id) {
         setSelectedEvent(null);
@@ -388,6 +428,7 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
             <div className="mt-2 grid grid-cols-7 gap-1">
               {monthDays.map((day) => {
                 const dayEvents = getEventsForDay(events, day.date);
+                const eventDots = getDayEventDots(dayEvents);
                 const isSelected = getDateKey(selectedDate) === day.key;
 
                 return (
@@ -416,14 +457,11 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
                     </span>
                     <span className="mt-1 flex h-2 items-center justify-center gap-1">
                       {!isLoading
-                        ? dayEvents.slice(0, 3).map((calendarEvent) => (
+                        ? eventDots.map((color) => (
                           <span
-                            key={calendarEvent.id}
-                            className={`size-1.5 rounded-full ${
-                              calendarEvent.source === "google"
-                                ? "bg-accent/70"
-                                : "bg-success/80"
-                            }`}
+                            key={color}
+                            className="size-1.5 rounded-full"
+                            style={{ backgroundColor: color }}
                           />
                         ))
                         : null}
@@ -482,13 +520,18 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
                     }}
                     className="w-full rounded-2xl bg-panel/68 px-3 py-3 text-left transition hover:bg-panel focus:outline-none focus:ring-2 focus:ring-accent/25"
                   >
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {calendarEvent.title}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="size-2 shrink-0 rounded-full"
+                        style={{ backgroundColor: calendarEvent.calendarColor }}
+                      />
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {calendarEvent.title}
+                      </p>
+                    </div>
                     <p className="mt-1 text-xs text-muted">
                       {formatEventTime(calendarEvent)}
-                      {calendarEvent.source === "google" &&
-                      calendarEvent.calendarName
+                      {calendarEvent.calendarName
                         ? ` · ${calendarEvent.calendarName}`
                         : ""}
                     </p>
@@ -573,11 +616,17 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
               <div className="min-w-0">
                 <p className="text-xs text-muted">
                   {formatEventDate(selectedEvent)} · {formatEventTime(selectedEvent)}
-                  {selectedEvent.source === "google" &&
-                  selectedEvent.calendarName
+                  {selectedEvent.calendarName
                     ? ` · ${selectedEvent.calendarName}`
                     : ""}
                 </p>
+                <div className="mt-2 flex items-center gap-2 text-xs text-muted">
+                  <span
+                    className="size-2 rounded-full"
+                    style={{ backgroundColor: selectedEvent.calendarColor }}
+                  />
+                  <span>{selectedEvent.calendarName ?? "Kalender"}</span>
+                </div>
                 <h3 className="mt-2 break-words text-base font-medium text-foreground">
                   {selectedEvent.title}
                 </h3>
@@ -599,7 +648,7 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
               </p>
             ) : null}
 
-            {selectedEvent.source === "local" ? (
+            {selectedEvent.canEdit && selectedEvent.canDelete ? (
               <button
                 type="button"
                 disabled={pendingDeleteIds.has(selectedEvent.id)}
