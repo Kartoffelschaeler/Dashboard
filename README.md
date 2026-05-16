@@ -38,20 +38,30 @@ Die App läuft danach unter `http://localhost:3000`.
 
 Die Website bleibt öffentlich sichtbar. Uhrzeit, Datum, Layout und der KI-Chat-Platzhalter sind frei zugänglich.
 
-Persönliche Bereiche wie Todos, Kalender und spätere private Daten werden erst nach Eingabe von `DASHBOARD_PASSWORD` angezeigt. Der entsperrte Zustand wird nur lokal im Browser gespeichert und kann über „Sperren“ zurückgesetzt werden.
+Persönliche Bereiche wie Zentrale, Kalender und spätere private Daten werden erst nach Eingabe von `DASHBOARD_PASSWORD` angezeigt. Der entsperrte Zustand wird nur lokal im Browser gespeichert.
 
 Dieser Schutz ist für ein persönliches Dashboard gedacht und ersetzt kein vollständiges Benutzerkonto mit Authentifizierung.
 
+## Dashboard-Struktur
+
+Das Dashboard bleibt bewusst reduziert:
+
+- links: Zeit, Datum und Kalender-Icon
+- rechts: Zentrale
+- darunter: KI-Chat-Platzhalter
+
+Die Zentrale nutzt aktuell weiterhin die bestehende `todos` Tabelle. Sie ist als späterer KI-Ausgabebereich vorbereitet, zum Beispiel für Hausaufgaben, Abgaben, Erinnerungen, kurze Notizen und persönliche Aufgaben. Eine spätere Migration auf eine allgemeinere `dashboard_items` Tabelle ist vorgesehen, aber noch nicht nötig.
+
 ## Kalender
 
-Der Kalender erscheint nach dem Entsperren direkt unter den Todos. Er bleibt bewusst schlicht:
+Der Kalender ist kein dauerhaftes Dashboard-Panel mehr. Nach dem Entsperren öffnet das Kalender-Icon in der Zeitkarte ein ruhiges Modal:
 
 - Monatsansicht mit Navigation
-- aktuelle Woche leicht hervorgehoben
 - heutiger Tag deutlich markiert
-- Termine direkt im Monatsraster
-- Tagesansicht rechts mit Löschfunktion
-- kleines Modal zum schnellen Erstellen von Terminen
+- Tage mit Terminen zeigen kleine Punkte
+- Tagesdetails erscheinen erst nach Klick auf einen Tag
+- Termine können im Detailbereich geöffnet und gelöscht werden
+- neue Termine werden über den kleinen Plus-Button im Modal erstellt
 
 Die Kalenderlogik ist für spätere KI-Agenten vorbereitet:
 
