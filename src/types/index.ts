@@ -1,7 +1,9 @@
 export type { AgentAction, AgentToolMap, AgentToolResult } from "@/types/agent";
 export type {
   CalendarDay,
+  CalendarDisplayEvent,
   CalendarEvent,
+  CalendarEventSource,
   CreateCalendarEventInput,
 } from "@/types/calendar";
 export type {
@@ -11,3 +13,9 @@ export type {
 } from "@/types/dashboard";
 export type { ChatMessage, ChatRole } from "@/types/chat";
 export type { CreateTaskInput, Task } from "@/types/task";
+export type {
+  CalendarConnection,
+  CreateGoogleEventInput,
+  GoogleCalendar,
+  GoogleCalendarEvent,
+} from "@/types/google-calendar";

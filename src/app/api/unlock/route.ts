@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
+import { dashboardUnlockCookie } from "@/lib/server/dashboard-auth";
 
 function passwordsMatch(input: string, expected: string) {
   const inputBuffer = Buffer.from(input);
@@ -24,7 +25,20 @@ export async function POST(request: Request) {
     const password = typeof body.password === "string" ? body.password : "";
     const isValid = passwordsMatch(password, dashboardPassword);
 
-    return NextResponse.json(isValid, { status: isValid ? 200 : 401 });
+    const response = NextResponse.json(isValid, {
+      status: isValid ? 200 : 401,
+    });
+
+    if (isValid) {
+      response.cookies.set(dashboardUnlockCookie, "true", {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+      });
+    }
+
+    return response;
   } catch {
     return NextResponse.json(false, { status: 400 });
   }

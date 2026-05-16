@@ -15,7 +15,8 @@ import {
   deleteEvent,
   getEvents,
 } from "@/lib/services/calendar-service";
-import type { CalendarEvent } from "@/types/calendar";
+import type { CalendarDisplayEvent, CalendarEvent } from "@/types/calendar";
+import type { GoogleCalendarEvent } from "@/types/google-calendar";
 import {
   addMonths,
   buildMonthDays,
@@ -35,7 +36,7 @@ type CalendarModalProps = {
   onClose: () => void;
 };
 
-function sortEvents(events: CalendarEvent[]) {
+function sortEvents(events: CalendarDisplayEvent[]) {
   return [...events].sort(
     (first, second) =>
       new Date(first.start_date).getTime() -
@@ -43,12 +44,60 @@ function sortEvents(events: CalendarEvent[]) {
   );
 }
 
+function localEventToDisplayEvent(event: CalendarEvent): CalendarDisplayEvent {
+  return {
+    ...event,
+    source: "local",
+    canDelete: true,
+  };
+}
+
+function googleDateToStartValue(event: GoogleCalendarEvent) {
+  return event.start.dateTime ?? `${event.start.date ?? ""}T00:00:00`;
+}
+
+function googleDateToEndValue(event: GoogleCalendarEvent) {
+  if (event.end.dateTime) {
+    return event.end.dateTime;
+  }
+
+  if (event.end.date) {
+    const exclusiveEnd = createLocalDate(event.end.date);
+    exclusiveEnd.setMilliseconds(exclusiveEnd.getMilliseconds() - 1);
+
+    return exclusiveEnd.toISOString();
+  }
+
+  return null;
+}
+
+function googleEventToDisplayEvent(
+  event: GoogleCalendarEvent,
+): CalendarDisplayEvent {
+  const startDate = googleDateToStartValue(event);
+
+  return {
+    id: `google:${event.calendarId}:${event.id}`,
+    title: event.summary,
+    description: event.description ?? null,
+    start_date: startDate,
+    end_date: googleDateToEndValue(event),
+    all_day: Boolean(event.start.date),
+    created_at: startDate,
+    source: "google",
+    calendarId: event.calendarId,
+    calendarName: event.calendarSummary,
+    canDelete: false,
+  };
+}
+
 export function CalendarModal({ onClose }: CalendarModalProps) {
   const hasSupabaseConfig = isSupabaseConfigured();
   const [visibleMonth, setVisibleMonth] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(() => new Date());
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [selectedEvent, setSelectedEvent] =
+    useState<CalendarDisplayEvent | null>(null);
+  const [events, setEvents] = useState<CalendarDisplayEvent[]>([]);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(() => getInputDateValue(new Date()));
@@ -97,10 +146,35 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
       try {
         setIsLoading(true);
         setError(null);
-        const loadedEvents = await getEvents(gridStart, gridEnd);
+        const [loadedEvents, googleEvents] = await Promise.all([
+          getEvents(gridStart, gridEnd),
+          fetch(
+            `/api/calendar/events?${new URLSearchParams({
+              from: gridStart.toISOString(),
+              to: gridEnd.toISOString(),
+            })}`,
+          )
+            .then(async (response) => {
+              if (!response.ok) {
+                return [];
+              }
+
+              const data = (await response.json()) as {
+                events?: GoogleCalendarEvent[];
+              };
+
+              return data.events ?? [];
+            })
+            .catch(() => []),
+        ]);
 
         if (isMounted) {
-          setEvents(sortEvents(loadedEvents));
+          setEvents(
+            sortEvents([
+              ...loadedEvents.map(localEventToDisplayEvent),
+              ...googleEvents.map(googleEventToDisplayEvent),
+            ]),
+          );
         }
       } catch (loadError) {
         if (isMounted) {
@@ -172,7 +246,9 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
         allDay: !time,
       });
 
-      setEvents((currentEvents) => sortEvents([...currentEvents, createdEvent]));
+      setEvents((currentEvents) =>
+        sortEvents([...currentEvents, localEventToDisplayEvent(createdEvent)]),
+      );
       setSelectedDate(startsAt);
       setVisibleMonth(new Date(startsAt.getFullYear(), startsAt.getMonth(), 1));
       closeCreateForm();
@@ -187,8 +263,8 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
     }
   }
 
-  async function handleDeleteEvent(event: CalendarEvent) {
-    if (pendingDeleteIds.has(event.id)) {
+  async function handleDeleteEvent(event: CalendarDisplayEvent) {
+    if (event.source !== "local" || pendingDeleteIds.has(event.id)) {
       return;
     }
 
@@ -327,7 +403,11 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
                         ? dayEvents.slice(0, 3).map((calendarEvent) => (
                           <span
                             key={calendarEvent.id}
-                            className="size-1.5 rounded-full bg-success/80"
+                            className={`size-1.5 rounded-full ${
+                              calendarEvent.source === "google"
+                                ? "bg-accent/70"
+                                : "bg-success/80"
+                            }`}
                           />
                         ))
                         : null}
@@ -391,6 +471,10 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
                     </p>
                     <p className="mt-1 text-xs text-muted">
                       {formatEventTime(calendarEvent)}
+                      {calendarEvent.source === "google" &&
+                      calendarEvent.calendarName
+                        ? ` · ${calendarEvent.calendarName}`
+                        : ""}
                     </p>
                   </button>
                 ))
@@ -473,6 +557,10 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
               <div className="min-w-0">
                 <p className="text-xs text-muted">
                   {formatEventDate(selectedEvent)} · {formatEventTime(selectedEvent)}
+                  {selectedEvent.source === "google" &&
+                  selectedEvent.calendarName
+                    ? ` · ${selectedEvent.calendarName}`
+                    : ""}
                 </p>
                 <h3 className="mt-2 break-words text-base font-medium text-foreground">
                   {selectedEvent.title}
@@ -495,15 +583,17 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
               </p>
             ) : null}
 
-            <button
-              type="button"
-              disabled={pendingDeleteIds.has(selectedEvent.id)}
-              onClick={() => void handleDeleteEvent(selectedEvent)}
-              className="mt-4 inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm text-muted transition hover:bg-panel-soft hover:text-accent-strong focus:outline-none focus:ring-2 focus:ring-accent/25 disabled:cursor-not-allowed disabled:opacity-55"
-            >
-              <Trash2 size={16} aria-hidden="true" />
-              Löschen
-            </button>
+            {selectedEvent.source === "local" ? (
+              <button
+                type="button"
+                disabled={pendingDeleteIds.has(selectedEvent.id)}
+                onClick={() => void handleDeleteEvent(selectedEvent)}
+                className="mt-4 inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm text-muted transition hover:bg-panel-soft hover:text-accent-strong focus:outline-none focus:ring-2 focus:ring-accent/25 disabled:cursor-not-allowed disabled:opacity-55"
+              >
+                <Trash2 size={16} aria-hidden="true" />
+                Löschen
+              </button>
+            ) : null}
           </div>
         ) : null}
       </section>

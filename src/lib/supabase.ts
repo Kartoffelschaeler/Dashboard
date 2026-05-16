@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { CalendarEvent } from "@/types/calendar";
+import type { CalendarConnection } from "@/types/google-calendar";
 import type { Task } from "@/types/task";
 
 type Database = {
@@ -43,6 +44,28 @@ type Database = {
         };
         Relationships: [];
       };
+      calendar_connections: {
+        Row: CalendarConnection;
+        Insert: {
+          id?: string;
+          provider?: "google";
+          access_token: string;
+          refresh_token?: string | null;
+          expires_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          provider?: "google";
+          access_token?: string;
+          refresh_token?: string | null;
+          expires_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -52,6 +75,7 @@ type Database = {
 };
 
 let supabase: SupabaseClient<Database> | null = null;
+let serverSupabase: SupabaseClient<Database> | null = null;
 
 export function isSupabaseConfigured() {
   return Boolean(
@@ -80,4 +104,26 @@ export function getSupabase() {
   });
 
   return supabase;
+}
+
+export function getServerSupabase() {
+  if (serverSupabase) {
+    return serverSupabase;
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return null;
+  }
+
+  serverSupabase = createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+
+  return serverSupabase;
 }

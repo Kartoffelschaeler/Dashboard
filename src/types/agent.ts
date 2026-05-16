@@ -4,6 +4,8 @@ import type { Task } from "@/types/task";
 export type AgentActionType =
   | "create_task"
   | "create_event"
+  | "update_event"
+  | "delete_event"
   | "get_open_tasks"
   | "get_upcoming_events";
 

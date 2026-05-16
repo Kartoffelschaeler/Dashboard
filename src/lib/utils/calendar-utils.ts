@@ -151,7 +151,10 @@ export function eventTouchesDay(event: CalendarEvent, date: Date) {
   return eventStart <= dayEnd && eventEnd >= dayStart;
 }
 
-export function getEventsForDay(events: CalendarEvent[], date: Date) {
+export function getEventsForDay<TEvent extends CalendarEvent>(
+  events: TEvent[],
+  date: Date,
+) {
   return events
     .filter((event) => eventTouchesDay(event, date))
     .sort(

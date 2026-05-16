@@ -1,4 +1,8 @@
+export { createCalendarEventTool } from "@/lib/agent/tools/create-calendar-event-tool";
 export { createEventTool } from "@/lib/agent/tools/create-event-tool";
 export { createTaskTool } from "@/lib/agent/tools/create-task-tool";
+export { deleteCalendarEventTool } from "@/lib/agent/tools/delete-calendar-event-tool";
+export { getCalendarEventsTool } from "@/lib/agent/tools/get-calendar-events-tool";
 export { getOpenTasksTool } from "@/lib/agent/tools/get-open-tasks-tool";
 export { getUpcomingEventsTool } from "@/lib/agent/tools/get-upcoming-events-tool";
+export { updateCalendarEventTool } from "@/lib/agent/tools/update-calendar-event-tool";

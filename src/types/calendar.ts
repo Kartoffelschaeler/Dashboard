@@ -8,6 +8,15 @@ export type CalendarEvent = {
   created_at: string;
 };
 
+export type CalendarEventSource = "local" | "google";
+
+export type CalendarDisplayEvent = CalendarEvent & {
+  source: CalendarEventSource;
+  calendarId?: string;
+  calendarName?: string;
+  canDelete?: boolean;
+};
+
 export type CreateCalendarEventInput = {
   title: string;
   description?: string | null;
