@@ -19,6 +19,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 DASHBOARD_PASSWORD=change-me
+LOCAL_AUTH_DISABLED=false
 
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
@@ -32,6 +33,14 @@ AGENT_MODEL=qwen2.5:7b
 `SUPABASE_SERVICE_ROLE_KEY` wird nur serverseitig genutzt, um geschützte Dashboard-Daten und Google OAuth Tokens zu speichern. Google Secrets und spätere Agent-Secrets dürfen nicht als `NEXT_PUBLIC_` Variablen angelegt werden.
 
 Der Agent läuft lokal über Ollama. Es wird kein API-Key benötigt. `OLLAMA_BASE_URL` fällt ohne Angabe auf `http://localhost:11434`, `AGENT_MODEL` auf `qwen2.5:7b`.
+
+Für lokale Entwicklung kann der Passwortschutz übersprungen werden:
+
+```env
+LOCAL_AUTH_DISABLED=true
+```
+
+Dieser Bypass wirkt nur in `NODE_ENV=development`. In Production bleibt der Passwortschutz aktiv.
 
 ## Struktur
 
@@ -97,6 +106,8 @@ Tasks und lokale Kalendertermine laufen im Frontend über geschützte API-Routen
 - `/api/local-calendar/events`
 
 Nach dem Unlock setzt der Server ein signiertes `httpOnly` Cookie mit begrenzter Laufzeit. `localStorage` wird nur für UI-Komfort verwendet und entscheidet nicht über Datenzugriff.
+
+Wenn `LOCAL_AUTH_DISABLED=true` in Development gesetzt ist, gelten geschützte UI-Bereiche und API-Routen automatisch als entsperrt. Supabase RLS, Service-Role-Zugriff und Google-Token-Schutz bleiben unverändert.
 
 ## Agent
 

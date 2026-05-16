@@ -14,6 +14,7 @@ type DashboardContextValue = {
   error: string | null;
   hasLoadedState: boolean;
   isChecking: boolean;
+  isLocalMode: boolean;
   isUnlocked: boolean;
   lock: () => Promise<void>;
   unlock: (password: string) => Promise<void>;
@@ -27,6 +28,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const [hasLoadedState, setHasLoadedState] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(false);
+  const [isLocalMode, setIsLocalMode] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -34,11 +36,15 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     async function loadStatus() {
       try {
         const response = await fetch("/api/auth/status");
-        const data = (await response.json()) as { unlocked?: boolean };
+        const data = (await response.json()) as {
+          localAuthDisabled?: boolean;
+          unlocked?: boolean;
+        };
         const isSessionUnlocked = response.ok && data.unlocked === true;
 
         if (isMounted) {
           setIsUnlocked(isSessionUnlocked);
+          setIsLocalMode(data.localAuthDisabled === true);
           window.localStorage.setItem(
             storageKey,
             isSessionUnlocked ? "true" : "false",
@@ -47,6 +53,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       } catch {
         if (isMounted) {
           setIsUnlocked(false);
+          setIsLocalMode(false);
           window.localStorage.setItem(storageKey, "false");
         }
       } finally {
@@ -110,11 +117,12 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       error,
       hasLoadedState,
       isChecking,
+      isLocalMode,
       isUnlocked,
       lock,
       unlock,
     }),
-    [error, hasLoadedState, isChecking, isUnlocked, lock, unlock],
+    [error, hasLoadedState, isChecking, isLocalMode, isUnlocked, lock, unlock],
   );
 
   return (

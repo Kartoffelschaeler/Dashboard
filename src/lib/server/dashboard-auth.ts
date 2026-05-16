@@ -3,6 +3,13 @@ import { createHmac, timingSafeEqual } from "crypto";
 export const dashboardUnlockCookie = "dashboard_unlocked";
 export const dashboardSessionMaxAge = 60 * 60 * 12;
 
+export function isLocalAuthDisabled() {
+  return (
+    process.env.NODE_ENV === "development" &&
+    process.env.LOCAL_AUTH_DISABLED === "true"
+  );
+}
+
 function getCookieValue(request: Request, name: string) {
   const cookie = request.headers.get("cookie") ?? "";
 
@@ -59,6 +66,10 @@ export function verifyDashboardSessionValue(value: string | undefined) {
 }
 
 export function hasDashboardAccess(request: Request) {
+  if (isLocalAuthDisabled()) {
+    return true;
+  }
+
   return verifyDashboardSessionValue(
     getCookieValue(request, dashboardUnlockCookie),
   );

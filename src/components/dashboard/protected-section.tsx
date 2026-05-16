@@ -6,7 +6,7 @@ import { UnlockCard } from "@/components/dashboard/unlock-card";
 import { CentralPanel } from "@/components/tasks/central-panel";
 
 export function ProtectedSection() {
-  const { error, hasLoadedState, isChecking, isUnlocked, unlock } =
+  const { error, hasLoadedState, isChecking, isLocalMode, isUnlocked, unlock } =
     useDashboard();
 
   if (!hasLoadedState) {
@@ -23,6 +23,11 @@ export function ProtectedSection() {
 
   return (
     <div className="grid gap-3">
+      {isLocalMode ? (
+        <div className="rounded-2xl bg-panel/58 px-4 py-2 text-xs text-muted">
+          Lokaler Modus
+        </div>
+      ) : null}
       <CentralPanel />
       <GoogleCalendarNotice />
     </div>
