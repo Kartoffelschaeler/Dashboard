@@ -4,3 +4,5 @@ export type Todo = {
   completed: boolean;
   created_at: string;
 };
+
+export type { CalendarEvent } from "@/lib/calendar-types";

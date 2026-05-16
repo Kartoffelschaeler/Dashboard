@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CalendarPlaceholder } from "@/components/calendar-placeholder";
+import { CalendarPanel } from "@/components/calendar-panel";
 import { TodoPanel } from "@/components/todo-panel";
 import { UnlockCard } from "@/components/unlock-card";
 
@@ -73,7 +73,7 @@ export function ProtectedSection() {
   return (
     <section className="grid gap-5">
       <TodoPanel />
-      <CalendarPlaceholder />
+      <CalendarPanel />
     </section>
   );
 }

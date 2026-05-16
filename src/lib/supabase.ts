@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { CalendarEvent } from "@/lib/calendar-types";
 import type { Todo } from "@/lib/types";
 
 type Database = {
@@ -16,6 +17,28 @@ type Database = {
           id?: string;
           text?: string;
           completed?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      calendar_events: {
+        Row: CalendarEvent;
+        Insert: {
+          id?: string;
+          title: string;
+          description?: string | null;
+          start_date: string;
+          end_date?: string | null;
+          all_day?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          title?: string;
+          description?: string | null;
+          start_date?: string;
+          end_date?: string | null;
+          all_day?: boolean;
           created_at?: string;
         };
         Relationships: [];

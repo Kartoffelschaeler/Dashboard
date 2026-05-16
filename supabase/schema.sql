@@ -5,6 +5,16 @@ create table if not exists public.todos (
   created_at timestamp not null default now()
 );
 
+create table if not exists public.calendar_events (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  description text,
+  start_date timestamp with time zone not null,
+  end_date timestamp with time zone,
+  all_day boolean not null default false,
+  created_at timestamp with time zone not null default now()
+);
+
 do $$
 begin
   if exists (
@@ -42,6 +52,16 @@ end $$;
 
 alter table public.todos enable row level security;
 
+alter table public.calendar_events enable row level security;
+
+drop policy if exists "Allow public read access" on public.todos;
+drop policy if exists "Allow public insert access" on public.todos;
+drop policy if exists "Allow public update access" on public.todos;
+drop policy if exists "Allow public delete access" on public.todos;
+drop policy if exists "Allow public calendar read access" on public.calendar_events;
+drop policy if exists "Allow public calendar insert access" on public.calendar_events;
+drop policy if exists "Allow public calendar delete access" on public.calendar_events;
+
 create policy "Allow public read access"
   on public.todos
   for select
@@ -60,5 +80,20 @@ create policy "Allow public update access"
 
 create policy "Allow public delete access"
   on public.todos
+  for delete
+  using (true);
+
+create policy "Allow public calendar read access"
+  on public.calendar_events
+  for select
+  using (true);
+
+create policy "Allow public calendar insert access"
+  on public.calendar_events
+  for insert
+  with check (true);
+
+create policy "Allow public calendar delete access"
+  on public.calendar_events
   for delete
   using (true);
