@@ -30,7 +30,7 @@ AGENT_MODEL=
 OPENAI_API_KEY=
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY` wird nur serverseitig genutzt, um Google OAuth Tokens zu speichern. Google Secrets und spätere Agent-Secrets dürfen nicht als `NEXT_PUBLIC_` Variablen angelegt werden.
+`SUPABASE_SERVICE_ROLE_KEY` wird nur serverseitig genutzt, um geschützte Dashboard-Daten und Google OAuth Tokens zu speichern. Google Secrets und spätere Agent-Secrets dürfen nicht als `NEXT_PUBLIC_` Variablen angelegt werden.
 
 `OPENAI_API_KEY`, `AGENT_ENABLED` und `AGENT_MODEL` sind nur vorbereitet und werden noch nicht verwendet.
 
@@ -89,6 +89,16 @@ Alle Datenoperationen laufen über Services:
 
 Komponenten sprechen nicht direkt mit Supabase. Ein späterer Agent soll ebenfalls diese Services verwenden.
 
+Tasks und lokale Kalendertermine laufen im Frontend über geschützte API-Routen:
+
+- `POST /api/auth/unlock`
+- `POST /api/auth/lock`
+- `GET /api/auth/status`
+- `/api/tasks`
+- `/api/local-calendar/events`
+
+Nach dem Unlock setzt der Server ein signiertes `httpOnly` Cookie mit begrenzter Laufzeit. `localStorage` wird nur für UI-Komfort verwendet und entscheidet nicht über Datenzugriff.
+
 ## Agent-Vorbereitung
 
 Noch keine echte KI ist eingebaut. Vorbereitet sind:
@@ -144,7 +154,7 @@ create table if not exists public.calendar_events (
 );
 ```
 
-Row Level Security ist aktiviert. Die App schützt persönliche Bereiche zusätzlich über das lokale Passwort-Unlock.
+Row Level Security ist aktiviert. Für `todos`, `calendar_events` und `calendar_connections` gibt es keine öffentlichen Policies. Der direkte Zugriff mit dem Anon Key ist damit für sensible Daten gesperrt; die App nutzt dafür geschützte Server-Routen mit `SUPABASE_SERVICE_ROLE_KEY`.
 
 Google OAuth Tokens liegen in `calendar_connections`. Für diese Tabelle sind keine öffentlichen RLS Policies vorgesehen; der Zugriff läuft serverseitig über den Supabase Service Role Key.
 

@@ -32,6 +32,12 @@ export type GoogleCalendarEvent = {
   htmlLink?: string;
 };
 
+export type GoogleCalendarWarning = {
+  calendarId: string;
+  calendarSummary?: string;
+  message: string;
+};
+
 export type CreateGoogleEventInput = {
   title: string;
   description?: string | null;

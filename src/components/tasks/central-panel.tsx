@@ -9,7 +9,6 @@ import {
   getTasks,
   toggleTask,
 } from "@/lib/services/task-service";
-import { isSupabaseConfigured } from "@/lib/supabase";
 import type { Task } from "@/types/task";
 
 function sortTasks(tasks: Task[]) {
@@ -21,7 +20,6 @@ function sortTasks(tasks: Task[]) {
 }
 
 export function CentralPanel() {
-  const hasSupabaseConfig = isSupabaseConfigured();
   // The Zentrale still uses the existing todos table. A future dashboard_items
   // service can replace this data layer without changing the panel behavior.
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -35,14 +33,6 @@ export function CentralPanel() {
     let isMounted = true;
 
     async function loadTasks() {
-      if (!hasSupabaseConfig) {
-        setError(
-          "Supabase ist noch nicht verbunden. Bitte URL und Anon Key konfigurieren.",
-        );
-        setIsLoading(false);
-        return;
-      }
-
       try {
         setIsLoading(true);
         setError(null);
@@ -71,7 +61,7 @@ export function CentralPanel() {
     return () => {
       isMounted = false;
     };
-  }, [hasSupabaseConfig]);
+  }, []);
 
   function setTaskPending(id: string, isPending: boolean) {
     setPendingIds((currentIds) => {
@@ -92,7 +82,7 @@ export function CentralPanel() {
 
     const text = newItem.trim();
 
-    if (!text || isCreating || !hasSupabaseConfig) {
+    if (!text || isCreating) {
       return;
     }
 
@@ -188,13 +178,13 @@ export function CentralPanel() {
           onChange={(event) => setNewItem(event.target.value)}
           maxLength={160}
           placeholder="Was steht an?"
-          disabled={isCreating || isLoading || !hasSupabaseConfig}
+          disabled={isCreating || isLoading}
           className="min-w-0 flex-1 rounded-2xl border border-line bg-white/50 px-4 py-3 text-sm text-foreground outline-none transition placeholder:text-muted/70 focus:border-accent focus:bg-white/72 disabled:cursor-not-allowed disabled:opacity-60"
         />
         <button
           type="submit"
           disabled={
-            isCreating || isLoading || !hasSupabaseConfig || !newItem.trim()
+            isCreating || isLoading || !newItem.trim()
           }
           className="grid size-12 shrink-0 place-items-center rounded-2xl bg-accent text-white shadow-[0_12px_24px_rgba(156,99,62,0.20)] transition hover:bg-accent-strong focus:outline-none focus:ring-2 focus:ring-accent-strong/35 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-accent"
           aria-label="Eintrag hinzufügen"

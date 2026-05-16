@@ -1,6 +1,6 @@
 import { requireDashboardAccess } from "@/lib/server/dashboard-auth";
 import { getGoogleConnection } from "@/lib/services/google-calendar-auth-service";
-import { getGoogleEvents } from "@/lib/services/google-calendar-service";
+import { getGoogleEventsWithWarnings } from "@/lib/services/google-calendar-service";
 
 export async function GET(request: Request) {
   const accessError = requireDashboardAccess(request);
@@ -25,12 +25,15 @@ export async function GET(request: Request) {
     const connection = await getGoogleConnection();
 
     if (!connection) {
-      return Response.json({ events: [] });
+      return Response.json({ events: [], warnings: [] });
     }
 
-    const events = await getGoogleEvents(rangeStart, rangeEnd);
+    const { events, warnings } = await getGoogleEventsWithWarnings(
+      rangeStart,
+      rangeEnd,
+    );
 
-    return Response.json({ events });
+    return Response.json({ events, warnings });
   } catch (error) {
     return Response.json(
       {

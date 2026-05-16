@@ -1,82 +1,62 @@
-import { getSupabase } from "@/lib/supabase";
 import { createServiceError } from "@/lib/services/service-error";
 import type {
   CalendarEvent,
   CreateCalendarEventInput,
 } from "@/types/calendar";
 
-const calendarEventFields =
-  "id,title,description,start_date,end_date,all_day,created_at";
+async function readJson<TData>(response: Response): Promise<TData> {
+  const data = (await response.json()) as TData & { error?: string };
 
-export async function getEvents(
-  rangeStart: Date,
-  rangeEnd: Date,
-): Promise<CalendarEvent[]> {
-  const supabase = getSupabase();
-
-  if (!supabase) {
-    throw createServiceError("Supabase ist noch nicht verbunden.");
-  }
-
-  const { data, error } = await supabase
-    .from("calendar_events")
-    .select(calendarEventFields)
-    .lte("start_date", rangeEnd.toISOString())
-    .or(
-      `end_date.gte.${rangeStart.toISOString()},and(end_date.is.null,start_date.gte.${rangeStart.toISOString()})`,
-    )
-    .order("start_date", { ascending: true });
-
-  if (error) {
-    throw createServiceError(error.message);
-  }
-
-  return data ?? [];
-}
-
-export async function createEvent(
-  input: CreateCalendarEventInput,
-): Promise<CalendarEvent> {
-  const supabase = getSupabase();
-
-  if (!supabase) {
-    throw createServiceError("Supabase ist noch nicht verbunden.");
-  }
-
-  const { data, error } = await supabase
-    .from("calendar_events")
-    .insert({
-      title: input.title,
-      description: input.description?.trim() || null,
-      start_date: input.startDate,
-      end_date: input.endDate || null,
-      all_day: input.allDay ?? false,
-    })
-    .select(calendarEventFields)
-    .single();
-
-  if (error) {
-    throw createServiceError(error.message);
+  if (!response.ok) {
+    throw createServiceError(data.error ?? "Aktion fehlgeschlagen.");
   }
 
   return data;
 }
 
+export async function getEvents(
+  rangeStart: Date,
+  rangeEnd: Date,
+): Promise<CalendarEvent[]> {
+  const params = new URLSearchParams({
+    from: rangeStart.toISOString(),
+    to: rangeEnd.toISOString(),
+  });
+  const data = await readJson<{ events: CalendarEvent[] }>(
+    await fetch(`/api/local-calendar/events?${params}`),
+  );
+
+  return data.events;
+}
+
+export async function createEvent(
+  input: CreateCalendarEventInput,
+): Promise<CalendarEvent> {
+  const data = await readJson<{ event: CalendarEvent }>(
+    await fetch("/api/local-calendar/events", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+      title: input.title,
+      description: input.description?.trim() || null,
+        startDate: input.startDate,
+        endDate: input.endDate || null,
+        allDay: input.allDay ?? false,
+      }),
+    }),
+  );
+
+  return data.event;
+}
+
 export async function deleteEvent(id: string): Promise<void> {
-  const supabase = getSupabase();
-
-  if (!supabase) {
-    throw createServiceError("Supabase ist noch nicht verbunden.");
-  }
-
-  const { error } = await supabase
-    .from("calendar_events")
-    .delete()
-    .eq("id", id);
-
-  if (error) {
-    throw createServiceError(error.message);
-  }
+  await readJson<{ deleted: true }>(
+    await fetch(`/api/local-calendar/events/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+  );
 }
 
 export const getCalendarEvents = getEvents;

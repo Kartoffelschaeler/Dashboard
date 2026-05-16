@@ -4,6 +4,7 @@ import type {
   CreateGoogleEventInput,
   GoogleCalendar,
   GoogleCalendarEvent,
+  GoogleCalendarWarning,
 } from "@/types/google-calendar";
 
 type GoogleCalendarListResponse = {
@@ -77,8 +78,17 @@ export async function getAgentCalendar() {
 }
 
 export async function getGoogleEvents(rangeStart: Date, rangeEnd: Date) {
+  const result = await getGoogleEventsWithWarnings(rangeStart, rangeEnd);
+
+  return result.events;
+}
+
+export async function getGoogleEventsWithWarnings(
+  rangeStart: Date,
+  rangeEnd: Date,
+) {
   const calendars = await getGoogleCalendars();
-  const eventGroups = await Promise.all(
+  const eventGroups = await Promise.allSettled(
     calendars.map(async (calendar) => {
       const params = new URLSearchParams({
         singleEvents: "true",
@@ -102,8 +112,28 @@ export async function getGoogleEvents(rangeStart: Date, rangeEnd: Date) {
       }));
     }),
   );
+  const events: GoogleCalendarEvent[] = [];
+  const warnings: GoogleCalendarWarning[] = [];
 
-  return eventGroups.flat();
+  eventGroups.forEach((result, index) => {
+    if (result.status === "fulfilled") {
+      events.push(...result.value);
+      return;
+    }
+
+    const calendar = calendars[index];
+
+    warnings.push({
+      calendarId: calendar.id,
+      calendarSummary: calendar.summary,
+      message: "Kalender konnte nicht geladen werden.",
+    });
+    console.warn("Google calendar skipped while loading events.", {
+      calendarId: calendar.id,
+    });
+  });
+
+  return { events, warnings };
 }
 
 export async function createGoogleEvent(input: CreateGoogleEventInput) {
@@ -160,13 +190,34 @@ export async function deleteGoogleEvent(eventId: string) {
   );
 }
 
+export function getExclusiveAllDayEndDate(
+  startDate: string,
+  endDate?: string | null,
+) {
+  const startDateOnly = startDate.slice(0, 10);
+  const endDateOnly = endDate?.slice(0, 10);
+
+  if (endDateOnly && endDateOnly > startDateOnly) {
+    return endDateOnly;
+  }
+
+  const [year, month, day] = startDateOnly.split("-").map(Number);
+  const nextDate = new Date(Date.UTC(year, month - 1, day));
+
+  nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+
+  return nextDate.toISOString().slice(0, 10);
+}
+
 function createGoogleEventBody(input: CreateGoogleEventInput) {
   if (input.allDay) {
     return {
       summary: input.title,
       description: input.description ?? undefined,
       start: { date: input.startDate.slice(0, 10) },
-      end: { date: (input.endDate ?? input.startDate).slice(0, 10) },
+      end: {
+        date: getExclusiveAllDayEndDate(input.startDate, input.endDate),
+      },
     };
   }
 

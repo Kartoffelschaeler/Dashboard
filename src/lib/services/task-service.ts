@@ -1,84 +1,59 @@
-import { getSupabase } from "@/lib/supabase";
 import { createServiceError } from "@/lib/services/service-error";
 import type { Task } from "@/types/task";
 
-const taskFields = "id,text,completed,created_at";
+async function readJson<TData>(response: Response): Promise<TData> {
+  const data = (await response.json()) as TData & { error?: string };
 
-export async function getTasks(): Promise<Task[]> {
-  const supabase = getSupabase();
-
-  if (!supabase) {
-    throw createServiceError("Supabase ist noch nicht verbunden.");
-  }
-
-  const { data, error } = await supabase
-    .from("todos")
-    .select(taskFields)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    throw createServiceError(error.message);
-  }
-
-  return data ?? [];
-}
-
-export async function createTask(text: string): Promise<Task> {
-  const supabase = getSupabase();
-
-  if (!supabase) {
-    throw createServiceError("Supabase ist noch nicht verbunden.");
-  }
-
-  const { data, error } = await supabase
-    .from("todos")
-    .insert({ text })
-    .select(taskFields)
-    .single();
-
-  if (error) {
-    throw createServiceError(error.message);
+  if (!response.ok) {
+    throw createServiceError(data.error ?? "Aktion fehlgeschlagen.");
   }
 
   return data;
+}
+
+export async function getTasks(): Promise<Task[]> {
+  const data = await readJson<{ tasks: Task[] }>(await fetch("/api/tasks"));
+
+  return data.tasks;
+}
+
+export async function createTask(text: string): Promise<Task> {
+  const data = await readJson<{ task: Task }>(
+    await fetch("/api/tasks", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ text }),
+    }),
+  );
+
+  return data.task;
 }
 
 export async function toggleTask(
   id: string,
   completed: boolean,
 ): Promise<Task> {
-  const supabase = getSupabase();
+  const data = await readJson<{ task: Task }>(
+    await fetch(`/api/tasks/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ completed }),
+    }),
+  );
 
-  if (!supabase) {
-    throw createServiceError("Supabase ist noch nicht verbunden.");
-  }
-
-  const { data, error } = await supabase
-    .from("todos")
-    .update({ completed })
-    .eq("id", id)
-    .select(taskFields)
-    .single();
-
-  if (error) {
-    throw createServiceError(error.message);
-  }
-
-  return data;
+  return data.task;
 }
 
 export async function deleteTask(id: string): Promise<void> {
-  const supabase = getSupabase();
-
-  if (!supabase) {
-    throw createServiceError("Supabase ist noch nicht verbunden.");
-  }
-
-  const { error } = await supabase.from("todos").delete().eq("id", id);
-
-  if (error) {
-    throw createServiceError(error.message);
-  }
+  await readJson<{ deleted: true }>(
+    await fetch(`/api/tasks/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+  );
 }
 
 export const getTodos = getTasks;

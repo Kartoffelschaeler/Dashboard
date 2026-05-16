@@ -77,39 +77,3 @@ drop policy if exists "Allow public calendar read access" on public.calendar_eve
 drop policy if exists "Allow public calendar insert access" on public.calendar_events;
 drop policy if exists "Allow public calendar delete access" on public.calendar_events;
 drop policy if exists "Allow public connection read access" on public.calendar_connections;
-
-create policy "Allow public read access"
-  on public.todos
-  for select
-  using (true);
-
-create policy "Allow public insert access"
-  on public.todos
-  for insert
-  with check (true);
-
-create policy "Allow public update access"
-  on public.todos
-  for update
-  using (true)
-  with check (true);
-
-create policy "Allow public delete access"
-  on public.todos
-  for delete
-  using (true);
-
-create policy "Allow public calendar read access"
-  on public.calendar_events
-  for select
-  using (true);
-
-create policy "Allow public calendar insert access"
-  on public.calendar_events
-  for insert
-  with check (true);
-
-create policy "Allow public calendar delete access"
-  on public.calendar_events
-  for delete
-  using (true);

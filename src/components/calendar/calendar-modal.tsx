@@ -16,7 +16,10 @@ import {
   getEvents,
 } from "@/lib/services/calendar-service";
 import type { CalendarDisplayEvent, CalendarEvent } from "@/types/calendar";
-import type { GoogleCalendarEvent } from "@/types/google-calendar";
+import type {
+  GoogleCalendarEvent,
+  GoogleCalendarWarning,
+} from "@/types/google-calendar";
 import {
   addMonths,
   buildMonthDays,
@@ -30,7 +33,6 @@ import {
   getMonthLabel,
   weekDayLabels,
 } from "@/lib/utils/calendar-utils";
-import { isSupabaseConfigured } from "@/lib/supabase";
 
 type CalendarModalProps = {
   onClose: () => void;
@@ -92,7 +94,6 @@ function googleEventToDisplayEvent(
 }
 
 export function CalendarModal({ onClose }: CalendarModalProps) {
-  const hasSupabaseConfig = isSupabaseConfigured();
   const [visibleMonth, setVisibleMonth] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [selectedEvent, setSelectedEvent] =
@@ -104,6 +105,7 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
   const [time, setTime] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [googleWarning, setGoogleWarning] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(
@@ -135,18 +137,11 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
     const { gridStart, gridEnd } = getCalendarRange(visibleMonth);
 
     async function loadEvents() {
-      if (!hasSupabaseConfig) {
-        setError(
-          "Supabase ist noch nicht verbunden. Bitte URL und Anon Key konfigurieren.",
-        );
-        setIsLoading(false);
-        return;
-      }
-
       try {
         setIsLoading(true);
         setError(null);
-        const [loadedEvents, googleEvents] = await Promise.all([
+        setGoogleWarning(null);
+        const [loadedEvents, googleResult] = await Promise.all([
           getEvents(gridStart, gridEnd),
           fetch(
             `/api/calendar/events?${new URLSearchParams({
@@ -156,23 +151,38 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
           )
             .then(async (response) => {
               if (!response.ok) {
-                return [];
+                return {
+                  events: [],
+                  warning: "Google-Termine konnten nicht geladen werden.",
+                };
               }
 
               const data = (await response.json()) as {
                 events?: GoogleCalendarEvent[];
+                warnings?: GoogleCalendarWarning[];
               };
 
-              return data.events ?? [];
+              return {
+                events: data.events ?? [],
+                warning: data.warnings?.length
+                  ? "Einige Google-Kalender konnten nicht geladen werden."
+                  : null,
+              };
             })
-            .catch(() => []),
+            .catch(() => {
+              return {
+                events: [],
+                warning: "Google-Termine konnten nicht geladen werden.",
+              };
+            }),
         ]);
 
         if (isMounted) {
+          setGoogleWarning(googleResult.warning);
           setEvents(
             sortEvents([
               ...loadedEvents.map(localEventToDisplayEvent),
-              ...googleEvents.map(googleEventToDisplayEvent),
+              ...googleResult.events.map(googleEventToDisplayEvent),
             ]),
           );
         }
@@ -196,7 +206,7 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
     return () => {
       isMounted = false;
     };
-  }, [hasSupabaseConfig, visibleMonth]);
+  }, [visibleMonth]);
 
   function openCreateForm() {
     setDate(getInputDateValue(selectedDate));
@@ -230,7 +240,7 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
 
     const trimmedTitle = title.trim();
 
-    if (!trimmedTitle || isCreating || !hasSupabaseConfig) {
+    if (!trimmedTitle || isCreating) {
       return;
     }
 
@@ -331,7 +341,7 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
             <button
               type="button"
               onClick={openCreateForm}
-              disabled={isLoading || !hasSupabaseConfig}
+              disabled={isLoading}
               className="grid size-10 place-items-center rounded-2xl bg-accent text-white shadow-[0_12px_24px_rgba(156,99,62,0.18)] transition hover:bg-accent-strong focus:outline-none focus:ring-2 focus:ring-accent-strong/35 disabled:cursor-not-allowed disabled:opacity-55"
               aria-label="Termin hinzufügen"
               title="Termin hinzufügen"
@@ -353,6 +363,12 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
         {error ? (
           <div className="mt-4 rounded-2xl bg-panel-soft/70 px-4 py-3 text-sm leading-6 text-accent-strong">
             {error}
+          </div>
+        ) : null}
+
+        {!error && googleWarning ? (
+          <div className="mt-4 rounded-2xl bg-panel-soft/50 px-4 py-3 text-xs leading-5 text-muted">
+            {googleWarning}
           </div>
         ) : null}
 
@@ -432,7 +448,7 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
               <button
                 type="button"
                 onClick={openCreateForm}
-                disabled={isLoading || !hasSupabaseConfig}
+                disabled={isLoading}
                 className="grid size-9 place-items-center rounded-xl text-muted transition hover:bg-panel hover:text-accent-strong focus:outline-none focus:ring-2 focus:ring-accent/25 disabled:cursor-not-allowed disabled:opacity-55"
                 aria-label="Termin an diesem Tag hinzufügen"
                 title="Termin an diesem Tag hinzufügen"
@@ -542,7 +558,7 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
 
               <button
                 type="submit"
-                disabled={!title.trim() || isCreating || !hasSupabaseConfig}
+                disabled={!title.trim() || isCreating}
                 className="mt-3 w-full rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white shadow-[0_12px_24px_rgba(156,99,62,0.18)] transition hover:bg-accent-strong focus:outline-none focus:ring-2 focus:ring-accent-strong/35 disabled:cursor-not-allowed disabled:opacity-55"
               >
                 Speichern

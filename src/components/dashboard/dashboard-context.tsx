@@ -15,6 +15,7 @@ type DashboardContextValue = {
   hasLoadedState: boolean;
   isChecking: boolean;
   isUnlocked: boolean;
+  lock: () => Promise<void>;
   unlock: (password: string) => Promise<void>;
 };
 
@@ -28,12 +29,38 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const [isChecking, setIsChecking] = useState(false);
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      setIsUnlocked(window.localStorage.getItem(storageKey) === "true");
-      setHasLoadedState(true);
-    }, 0);
+    let isMounted = true;
 
-    return () => window.clearTimeout(timeoutId);
+    async function loadStatus() {
+      try {
+        const response = await fetch("/api/auth/status");
+        const data = (await response.json()) as { unlocked?: boolean };
+        const isSessionUnlocked = response.ok && data.unlocked === true;
+
+        if (isMounted) {
+          setIsUnlocked(isSessionUnlocked);
+          window.localStorage.setItem(
+            storageKey,
+            isSessionUnlocked ? "true" : "false",
+          );
+        }
+      } catch {
+        if (isMounted) {
+          setIsUnlocked(false);
+          window.localStorage.setItem(storageKey, "false");
+        }
+      } finally {
+        if (isMounted) {
+          setHasLoadedState(true);
+        }
+      }
+    }
+
+    void loadStatus();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const unlock = useCallback(async (password: string) => {
@@ -45,7 +72,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       setIsChecking(true);
       setError(null);
 
-      const response = await fetch("/api/unlock", {
+      const response = await fetch("/api/auth/unlock", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -72,15 +99,22 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     }
   }, [isChecking]);
 
+  const lock = useCallback(async () => {
+    await fetch("/api/auth/lock", { method: "POST" });
+    window.localStorage.setItem(storageKey, "false");
+    setIsUnlocked(false);
+  }, []);
+
   const value = useMemo(
     () => ({
       error,
       hasLoadedState,
       isChecking,
       isUnlocked,
+      lock,
       unlock,
     }),
-    [error, hasLoadedState, isChecking, isUnlocked, unlock],
+    [error, hasLoadedState, isChecking, isUnlocked, lock, unlock],
   );
 
   return (
