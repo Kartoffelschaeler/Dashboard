@@ -222,7 +222,7 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
       onClick={onClose}
     >
       <section
-        className="max-h-[92vh] w-full max-w-5xl overflow-auto rounded-[2rem] bg-panel p-5 shadow-[0_24px_80px_rgba(70,55,45,0.20)] sm:p-6"
+        className="relative max-h-[92vh] w-full max-w-5xl overflow-auto rounded-[2rem] bg-panel p-5 shadow-[0_24px_80px_rgba(70,55,45,0.20)] sm:p-6"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3">
@@ -400,62 +400,71 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
         </div>
 
         {isCreateOpen ? (
-          <form
-            onSubmit={handleCreateEvent}
-            className="mt-5 rounded-2xl bg-white/30 p-4"
+          <div
+            className="absolute inset-0 z-10 grid place-items-center rounded-[2rem] bg-foreground/12 px-4 py-6 backdrop-blur-sm"
+            onClick={closeCreateForm}
           >
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-medium text-foreground">Termin</h3>
-              <button
-                type="button"
-                onClick={closeCreateForm}
-                className="grid size-8 place-items-center rounded-xl text-muted transition hover:bg-panel-soft hover:text-foreground focus:outline-none focus:ring-2 focus:ring-accent/25"
-                aria-label="Schließen"
-                title="Schließen"
-              >
-                <X size={16} aria-hidden="true" />
-              </button>
-            </div>
-
-            <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_10rem_8rem]">
-              <input
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                maxLength={120}
-                placeholder="Titel"
-                autoFocus
-                className="min-w-0 rounded-2xl border border-line bg-white/50 px-4 py-3 text-sm text-foreground outline-none transition placeholder:text-muted/70 focus:border-accent focus:bg-white/72"
-              />
-              <input
-                type="date"
-                value={date}
-                onChange={(event) => setDate(event.target.value)}
-                required
-                className="min-w-0 rounded-2xl border border-line bg-white/50 px-4 py-3 text-sm text-foreground outline-none transition focus:border-accent focus:bg-white/72"
-              />
-              <input
-                type="time"
-                value={time}
-                onChange={(event) => setTime(event.target.value)}
-                className="min-w-0 rounded-2xl border border-line bg-white/50 px-3 py-3 text-sm text-foreground outline-none transition focus:border-accent focus:bg-white/72"
-              />
-            </div>
-            <textarea
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              maxLength={500}
-              placeholder="Beschreibung"
-              rows={2}
-              className="mt-2 w-full resize-none rounded-2xl border border-line bg-white/50 px-4 py-3 text-sm leading-6 text-foreground outline-none transition placeholder:text-muted/70 focus:border-accent focus:bg-white/72"
-            />
-            <button
-              type="submit"
-              disabled={!title.trim() || isCreating || !hasSupabaseConfig}
-              className="mt-2 rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white shadow-[0_12px_24px_rgba(156,99,62,0.18)] transition hover:bg-accent-strong focus:outline-none focus:ring-2 focus:ring-accent-strong/35 disabled:cursor-not-allowed disabled:opacity-55"
+            <form
+              onSubmit={handleCreateEvent}
+              className="w-full max-w-md rounded-[1.75rem] bg-panel p-5 shadow-[0_24px_70px_rgba(97,66,42,0.18)]"
+              onClick={(event) => event.stopPropagation()}
             >
-              Speichern
-            </button>
-          </form>
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-medium text-foreground">Termin</h3>
+                <button
+                  type="button"
+                  onClick={closeCreateForm}
+                  className="grid size-8 place-items-center rounded-xl text-muted transition hover:bg-panel-soft hover:text-foreground focus:outline-none focus:ring-2 focus:ring-accent/25"
+                  aria-label="Schließen"
+                  title="Schließen"
+                >
+                  <X size={16} aria-hidden="true" />
+                </button>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                <input
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  maxLength={120}
+                  placeholder="Titel"
+                  autoFocus
+                  className="w-full rounded-2xl border border-line bg-white/50 px-4 py-3 text-sm text-foreground outline-none transition placeholder:text-muted/70 focus:border-accent focus:bg-white/72"
+                />
+                <div className="grid grid-cols-[1fr_7.5rem] gap-2">
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={(event) => setDate(event.target.value)}
+                    required
+                    className="min-w-0 rounded-2xl border border-line bg-white/50 px-4 py-3 text-sm text-foreground outline-none transition focus:border-accent focus:bg-white/72"
+                  />
+                  <input
+                    type="time"
+                    value={time}
+                    onChange={(event) => setTime(event.target.value)}
+                    className="min-w-0 rounded-2xl border border-line bg-white/50 px-3 py-3 text-sm text-foreground outline-none transition focus:border-accent focus:bg-white/72"
+                  />
+                </div>
+                <textarea
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  maxLength={500}
+                  placeholder="Beschreibung"
+                  rows={2}
+                  className="w-full resize-none rounded-2xl border border-line bg-white/50 px-4 py-3 text-sm leading-6 text-foreground outline-none transition placeholder:text-muted/70 focus:border-accent focus:bg-white/72"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={!title.trim() || isCreating || !hasSupabaseConfig}
+                className="mt-3 w-full rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white shadow-[0_12px_24px_rgba(156,99,62,0.18)] transition hover:bg-accent-strong focus:outline-none focus:ring-2 focus:ring-accent-strong/35 disabled:cursor-not-allowed disabled:opacity-55"
+              >
+                Speichern
+              </button>
+            </form>
+          </div>
         ) : null}
 
         {selectedEvent ? (

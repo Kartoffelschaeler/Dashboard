@@ -182,12 +182,6 @@ export function CentralPanel() {
 
   return (
     <article className="min-h-72 rounded-[2rem] bg-panel/88 p-5 shadow-[0_18px_50px_rgba(97,66,42,0.10)] backdrop-blur sm:p-6">
-      <div className="mb-4">
-        <p className="text-xs uppercase tracking-[0.18em] text-muted/80">
-          Zentrale
-        </p>
-      </div>
-
       <form onSubmit={handleCreateItem} className="flex gap-2">
         <input
           value={newItem}
