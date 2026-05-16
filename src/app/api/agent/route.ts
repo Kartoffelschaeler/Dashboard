@@ -10,13 +10,6 @@ export async function POST(request: Request) {
     return accessError;
   }
 
-  if (!process.env.OPENAI_API_KEY) {
-    return Response.json(
-      { error: "Agent ist noch nicht konfiguriert." },
-      { status: 503 },
-    );
-  }
-
   try {
     const body = (await request.json()) as {
       message?: unknown;
@@ -38,10 +31,18 @@ export async function POST(request: Request) {
 
     return Response.json(result);
   } catch (error) {
-    const message =
-      error instanceof Error && error.message === "OPENAI_API_KEY_MISSING"
-        ? "Agent ist noch nicht konfiguriert."
-        : "Agent konnte gerade nicht antworten.";
+    let message = "Agent konnte gerade nicht antworten.";
+
+    if (error instanceof Error) {
+      if (error.message === "OLLAMA_UNREACHABLE") {
+        message = "Lokaler Agent nicht erreichbar. Prüfe, ob Ollama läuft.";
+      }
+
+      if (error.message === "OLLAMA_MODEL_NOT_FOUND") {
+        message =
+          "Modell nicht gefunden. Bitte ollama pull qwen2.5:7b ausführen.";
+      }
+    }
 
     return Response.json({ error: message }, { status: 500 });
   }

@@ -1,32 +1,15 @@
 import { buildSystemPrompt } from "@/lib/agent/runtime/build-system-prompt";
 import { agentPolicy } from "@/lib/agent/runtime/agent-policy";
-import { executeToolCall, type ExecutedToolCall } from "@/lib/agent/runtime/tool-executor";
+import {
+  executeToolCall,
+  type ExecutedToolCall,
+} from "@/lib/agent/runtime/tool-executor";
 import { getToolRegistry } from "@/lib/agent/runtime/tool-registry";
+import {
+  chatWithOllama,
+  type OllamaChatMessage,
+} from "@/lib/services/ollama-service";
 import type { ChatMessage } from "@/types/chat";
-
-type OpenAiMessage = {
-  role: "system" | "user" | "assistant" | "tool";
-  content?: string | null;
-  tool_call_id?: string;
-  tool_calls?: OpenAiToolCall[];
-};
-
-type OpenAiToolCall = {
-  id: string;
-  type: "function";
-  function: {
-    name: string;
-    arguments: string;
-  };
-};
-
-type OpenAiChoice = {
-  message: OpenAiMessage;
-};
-
-type OpenAiChatResponse = {
-  choices?: OpenAiChoice[];
-};
 
 type RunAgentInput = {
   message: string;
@@ -34,13 +17,24 @@ type RunAgentInput = {
   conversationId?: string | null;
 };
 
+type AgentModelResponse =
+  | {
+    type: "final";
+    message: string;
+  }
+  | {
+    type: "tool_call";
+    tool: string;
+    arguments?: unknown;
+  };
+
 export type RunAgentResult = {
   assistantMessage: string;
   toolCalls: ExecutedToolCall[];
   warnings: string[];
 };
 
-function normalizeHistory(messages: ChatMessage[] = []): OpenAiMessage[] {
+function normalizeHistory(messages: ChatMessage[] = []): OllamaChatMessage[] {
   return messages
     .filter((message) => message.role === "user" || message.role === "assistant")
     .slice(-agentPolicy.maxHistoryMessages)
@@ -50,73 +44,79 @@ function normalizeHistory(messages: ChatMessage[] = []): OpenAiMessage[] {
     }));
 }
 
-function parseToolArguments(value: string) {
-  try {
-    return value ? (JSON.parse(value) as unknown) : {};
-  } catch {
-    return {};
-  }
-}
+function extractJsonObject(content: string) {
+  const trimmed = content.trim();
+  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fencedMatch?.[1]?.trim() ?? trimmed;
+  const start = candidate.indexOf("{");
+  const end = candidate.lastIndexOf("}");
 
-function toOpenAiToolName(name: string) {
-  return name.replaceAll(".", "__");
-}
-
-function fromOpenAiToolName(name: string) {
-  return name.replaceAll("__", ".");
-}
-
-async function callOpenAi(messages: OpenAiMessage[]) {
-  const apiKey = process.env.OPENAI_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY_MISSING");
+  if (start === -1 || end === -1 || end <= start) {
+    return null;
   }
 
-  const registry = getToolRegistry();
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 25_000);
+  return candidate.slice(start, end + 1);
+}
+
+function parseModelResponse(content: string): AgentModelResponse | null {
+  const json = extractJsonObject(content);
+
+  if (!json) {
+    return null;
+  }
 
   try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: process.env.AGENT_MODEL || agentPolicy.defaultModel,
-        messages,
-        temperature: 0.2,
-        tools: [...registry.values()].map((tool) => ({
-          type: "function",
-          function: {
-            name: toOpenAiToolName(tool.name),
-            description: `${tool.name}: ${tool.description}`,
-            parameters: tool.inputSchema,
-          },
-        })),
-        tool_choice: "auto",
-      }),
-    });
+    const parsed = JSON.parse(json) as Partial<AgentModelResponse>;
 
-    if (!response.ok) {
-      throw new Error("OPENAI_REQUEST_FAILED");
+    if (parsed.type === "final" && typeof parsed.message === "string") {
+      return { type: "final", message: parsed.message };
     }
 
-    return (await response.json()) as OpenAiChatResponse;
-  } finally {
-    clearTimeout(timeoutId);
+    if (parsed.type === "tool_call" && typeof parsed.tool === "string") {
+      return {
+        type: "tool_call",
+        tool: parsed.tool,
+        arguments: parsed.arguments ?? {},
+      };
+    }
+  } catch {
+    return null;
   }
+
+  return null;
+}
+
+function buildToolListForPrompt() {
+  return [...getToolRegistry().values()]
+    .map(
+      (tool) =>
+        `- ${tool.name}: ${tool.description} Schema: ${JSON.stringify(
+          tool.inputSchema,
+        )}`,
+    )
+    .join("\n");
+}
+
+async function askModel(messages: OllamaChatMessage[]) {
+  const { content } = await chatWithOllama(messages);
+  const parsed = parseModelResponse(content);
+
+  if (!parsed) {
+    return null;
+  }
+
+  return parsed;
 }
 
 export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
   const toolCalls: ExecutedToolCall[] = [];
   const warnings: string[] = [];
   const registry = getToolRegistry();
-  const messages: OpenAiMessage[] = [
-    { role: "system", content: buildSystemPrompt() },
+  const messages: OllamaChatMessage[] = [
+    {
+      role: "system",
+      content: `${buildSystemPrompt()}\n\nVerfügbare Tools:\n${buildToolListForPrompt()}`,
+    },
     ...normalizeHistory(input.messages),
     {
       role: "user",
@@ -125,57 +125,59 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
   ];
 
   for (let step = 0; step < agentPolicy.maxSteps; step += 1) {
-    const data = await callOpenAi(messages);
-    const assistantMessage = data.choices?.[0]?.message;
+    const response = await askModel(messages);
 
-    if (!assistantMessage) {
-      throw new Error("OPENAI_EMPTY_RESPONSE");
+    if (!response) {
+      warnings.push("Ungültiges Modellformat.");
+      messages.push({
+        role: "user",
+        content:
+          'Antworte erneut ausschließlich als JSON: {"type":"final","message":"..."} oder {"type":"tool_call","tool":"...","arguments":{}}',
+      });
+      continue;
     }
 
-    messages.push(assistantMessage);
-
-    if (!assistantMessage.tool_calls?.length) {
+    if (response.type === "final") {
       return {
-        assistantMessage: assistantMessage.content ?? "",
+        assistantMessage: response.message,
         toolCalls,
         warnings,
       };
-    }
-
-    const calls = assistantMessage.tool_calls.slice(
-      0,
-      agentPolicy.maxToolCallsPerRequest - toolCalls.length,
-    );
-
-    for (const call of calls) {
-      const tool = registry.get(fromOpenAiToolName(call.function.name));
-      const args = parseToolArguments(call.function.arguments);
-      const result = await executeToolCall(
-        tool,
-        args,
-        input.conversationId ?? null,
-      );
-
-      if (result.summary) {
-        toolCalls.push(result.summary);
-      }
-
-      messages.push({
-        role: "tool",
-        tool_call_id: call.id,
-        content: JSON.stringify(result.output),
-      });
     }
 
     if (toolCalls.length >= agentPolicy.maxToolCallsPerRequest) {
       warnings.push("Maximale Tool-Anzahl erreicht.");
       break;
     }
+
+    const tool = registry.get(response.tool);
+    const result = await executeToolCall(
+      tool,
+      response.arguments ?? {},
+      input.conversationId ?? null,
+    );
+
+    if (result.summary) {
+      toolCalls.push(result.summary);
+    } else {
+      warnings.push("Nicht erlaubtes Tool angefragt.");
+    }
+
+    messages.push({
+      role: "assistant",
+      content: JSON.stringify(response),
+    });
+    messages.push({
+      role: "user",
+      content: `Tool-Ergebnis für ${response.tool}: ${JSON.stringify(
+        result.output,
+      )}. Antworte jetzt mit final oder nutze genau ein weiteres Tool, falls nötig.`,
+    });
   }
 
   return {
     assistantMessage:
-      "Ich habe den Schritt begrenzt, damit nichts unbeaufsichtigt weiterläuft. Bitte formuliere kurz neu, was ich als Nächstes tun soll.",
+      "Ich konnte daraus gerade keine stabile lokale Agent-Antwort erzeugen. Bitte formuliere die Anfrage etwas konkreter.",
     toolCalls,
     warnings,
   };

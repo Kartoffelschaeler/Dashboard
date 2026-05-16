@@ -4,7 +4,7 @@ export const agentPolicy = {
   maxInputLength: 1600,
   maxHistoryMessages: 8,
   timezone: "Europe/Berlin",
-  defaultModel: "gpt-4o-mini",
+  defaultModel: "qwen2.5:7b",
 } as const;
 
 export type AgentToolRiskLevel = "low" | "medium";

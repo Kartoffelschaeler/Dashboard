@@ -1,13 +1,11 @@
 export type AgentConfig = {
-  enabled: boolean;
   model: string | null;
-  hasServerApiKey: boolean;
+  baseUrl: string;
 };
 
 export function getAgentConfig(): AgentConfig {
   return {
-    enabled: process.env.AGENT_ENABLED === "true",
-    model: process.env.AGENT_MODEL ?? null,
-    hasServerApiKey: Boolean(process.env.OPENAI_API_KEY),
+    model: process.env.AGENT_MODEL ?? "qwen2.5:7b",
+    baseUrl: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434",
   };
 }

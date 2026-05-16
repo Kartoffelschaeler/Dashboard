@@ -25,14 +25,13 @@ GOOGLE_CLIENT_SECRET=your-google-client-secret
 GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
 GOOGLE_AGENT_CALENDAR_NAME=Dashboard Agent
 
-AGENT_ENABLED=false
-AGENT_MODEL=
-OPENAI_API_KEY=
+OLLAMA_BASE_URL=http://localhost:11434
+AGENT_MODEL=qwen2.5:7b
 ```
 
 `SUPABASE_SERVICE_ROLE_KEY` wird nur serverseitig genutzt, um geschützte Dashboard-Daten und Google OAuth Tokens zu speichern. Google Secrets und spätere Agent-Secrets dürfen nicht als `NEXT_PUBLIC_` Variablen angelegt werden.
 
-`OPENAI_API_KEY`, `AGENT_ENABLED` und `AGENT_MODEL` sind nur vorbereitet und werden noch nicht verwendet.
+Der Agent läuft lokal über Ollama. Es wird kein API-Key benötigt. `OLLAMA_BASE_URL` fällt ohne Angabe auf `http://localhost:11434`, `AGENT_MODEL` auf `qwen2.5:7b`.
 
 ## Struktur
 
@@ -107,13 +106,23 @@ Der erste Agent ist eine kontrollierte Chat-Integration:
 Frontend Chat UI
 → POST /api/agent
 → Agent Runtime
+→ Ollama lokal
 → Tool Router
 → Agent Tools
 → Domain Services
 → Supabase / Google Calendar
 ```
 
-OpenAI wird ausschließlich serverseitig über `OPENAI_API_KEY` genutzt. Der Schlüssel darf niemals als `NEXT_PUBLIC_` Variable angelegt werden. Falls `AGENT_MODEL` leer ist, nutzt die Runtime ein kleines Tool-Calling-fähiges Standardmodell.
+Ollama wird ausschließlich serverseitig aus `/api/agent` angesprochen. Das Frontend spricht nie direkt mit Ollama. Die Runtime nutzt ein JSON-Protokoll für Tool Calls, damit lokale Modelle ohne native Tool-Calling-Schnittstelle stabil bleiben.
+
+Lokale Vorbereitung:
+
+```bash
+ollama pull qwen2.5:7b
+ollama run qwen2.5:7b
+```
+
+Das Dashboard muss lokal laufen, damit der Server `http://localhost:11434` erreichen kann.
 
 Aktivierte Tools:
 
