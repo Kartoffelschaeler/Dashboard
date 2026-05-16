@@ -11,11 +11,11 @@ import { createPortal } from "react-dom";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import {
-  createCalendarEvent,
-  getCalendarEvents,
-  removeCalendarEvent,
-} from "@/lib/calendar-service";
-import type { CalendarEvent } from "@/lib/calendar-types";
+  createEvent,
+  deleteEvent,
+  getEvents,
+} from "@/lib/services/calendar-service";
+import type { CalendarEvent } from "@/types/calendar";
 import {
   addMonths,
   buildMonthDays,
@@ -28,7 +28,7 @@ import {
   getInputDateValue,
   getMonthLabel,
   weekDayLabels,
-} from "@/lib/calendar-utils";
+} from "@/lib/utils/calendar-utils";
 import { isSupabaseConfigured } from "@/lib/supabase";
 
 type CalendarModalProps = {
@@ -97,7 +97,7 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
       try {
         setIsLoading(true);
         setError(null);
-        const loadedEvents = await getCalendarEvents(gridStart, gridEnd);
+        const loadedEvents = await getEvents(gridStart, gridEnd);
 
         if (isMounted) {
           setEvents(sortEvents(loadedEvents));
@@ -165,7 +165,7 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
     try {
       setIsCreating(true);
       setError(null);
-      const createdEvent = await createCalendarEvent({
+      const createdEvent = await createEvent({
         title: trimmedTitle,
         description,
         startDate: startsAt.toISOString(),
@@ -199,7 +199,7 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
 
     try {
       setError(null);
-      await removeCalendarEvent(event.id);
+      await deleteEvent(event.id);
 
       if (selectedEvent?.id === event.id) {
         setSelectedEvent(null);

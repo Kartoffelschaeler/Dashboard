@@ -4,16 +4,16 @@ import { Check, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import {
-  createTodo,
-  getTodos,
-  removeTodo,
-  updateTodoCompleted,
-} from "@/lib/todos";
+  createTask,
+  deleteTask,
+  getTasks,
+  toggleTask,
+} from "@/lib/services/task-service";
 import { isSupabaseConfigured } from "@/lib/supabase";
-import type { Todo } from "@/lib/types";
+import type { Task } from "@/types/task";
 
-function sortTodos(todos: Todo[]) {
-  return [...todos].sort(
+function sortTasks(tasks: Task[]) {
+  return [...tasks].sort(
     (first, second) =>
       new Date(second.created_at).getTime() -
       new Date(first.created_at).getTime(),
@@ -24,7 +24,7 @@ export function CentralPanel() {
   const hasSupabaseConfig = isSupabaseConfigured();
   // The Zentrale still uses the existing todos table. A future dashboard_items
   // service can replace this data layer without changing the panel behavior.
-  const [todos, setTodos] = useState<Todo[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [newItem, setNewItem] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -34,7 +34,7 @@ export function CentralPanel() {
   useEffect(() => {
     let isMounted = true;
 
-    async function loadTodos() {
+    async function loadTasks() {
       if (!hasSupabaseConfig) {
         setError(
           "Supabase ist noch nicht verbunden. Bitte URL und Anon Key konfigurieren.",
@@ -46,10 +46,10 @@ export function CentralPanel() {
       try {
         setIsLoading(true);
         setError(null);
-        const loadedTodos = await getTodos();
+        const loadedTasks = await getTasks();
 
         if (isMounted) {
-          setTodos(sortTodos(loadedTodos));
+          setTasks(sortTasks(loadedTasks));
         }
       } catch (loadError) {
         if (isMounted) {
@@ -66,14 +66,14 @@ export function CentralPanel() {
       }
     }
 
-    void loadTodos();
+    void loadTasks();
 
     return () => {
       isMounted = false;
     };
   }, [hasSupabaseConfig]);
 
-  function setTodoPending(id: string, isPending: boolean) {
+  function setTaskPending(id: string, isPending: boolean) {
     setPendingIds((currentIds) => {
       const nextIds = new Set(currentIds);
 
@@ -99,8 +99,8 @@ export function CentralPanel() {
     try {
       setIsCreating(true);
       setError(null);
-      const createdTodo = await createTodo(text);
-      setTodos((currentTodos) => sortTodos([createdTodo, ...currentTodos]));
+      const createdTask = await createTask(text);
+      setTasks((currentTasks) => sortTasks([createdTask, ...currentTasks]));
       setNewItem("");
     } catch (createError) {
       setError(
@@ -113,36 +113,36 @@ export function CentralPanel() {
     }
   }
 
-  async function handleToggleTodo(todo: Todo) {
-    if (pendingIds.has(todo.id)) {
+  async function handleToggleTask(task: Task) {
+    if (pendingIds.has(task.id)) {
       return;
     }
 
-    const nextCompleted = !todo.completed;
+    const nextCompleted = !task.completed;
 
-    setTodoPending(todo.id, true);
-    setTodos((currentTodos) =>
-      currentTodos.map((currentTodo) =>
-        currentTodo.id === todo.id
-          ? { ...currentTodo, completed: nextCompleted }
-          : currentTodo,
+    setTaskPending(task.id, true);
+    setTasks((currentTasks) =>
+      currentTasks.map((currentTask) =>
+        currentTask.id === task.id
+          ? { ...currentTask, completed: nextCompleted }
+          : currentTask,
       ),
     );
 
     try {
       setError(null);
-      const updatedTodo = await updateTodoCompleted(todo.id, nextCompleted);
-      setTodos((currentTodos) =>
-        sortTodos(
-          currentTodos.map((currentTodo) =>
-            currentTodo.id === todo.id ? updatedTodo : currentTodo,
+      const updatedTask = await toggleTask(task.id, nextCompleted);
+      setTasks((currentTasks) =>
+        sortTasks(
+          currentTasks.map((currentTask) =>
+            currentTask.id === task.id ? updatedTask : currentTask,
           ),
         ),
       );
     } catch (updateError) {
-      setTodos((currentTodos) =>
-        currentTodos.map((currentTodo) =>
-          currentTodo.id === todo.id ? todo : currentTodo,
+      setTasks((currentTasks) =>
+        currentTasks.map((currentTask) =>
+          currentTask.id === task.id ? task : currentTask,
         ),
       );
       setError(
@@ -151,32 +151,32 @@ export function CentralPanel() {
           : "Eintrag konnte nicht aktualisiert werden.",
       );
     } finally {
-      setTodoPending(todo.id, false);
+      setTaskPending(task.id, false);
     }
   }
 
-  async function handleDeleteTodo(todo: Todo) {
-    if (pendingIds.has(todo.id)) {
+  async function handleDeleteTask(task: Task) {
+    if (pendingIds.has(task.id)) {
       return;
     }
 
-    setTodoPending(todo.id, true);
-    setTodos((currentTodos) =>
-      currentTodos.filter((currentTodo) => currentTodo.id !== todo.id),
+    setTaskPending(task.id, true);
+    setTasks((currentTasks) =>
+      currentTasks.filter((currentTask) => currentTask.id !== task.id),
     );
 
     try {
       setError(null);
-      await removeTodo(todo.id);
+      await deleteTask(task.id);
     } catch (deleteError) {
-      setTodos((currentTodos) => sortTodos([todo, ...currentTodos]));
+      setTasks((currentTasks) => sortTasks([task, ...currentTasks]));
       setError(
         deleteError instanceof Error
           ? deleteError.message
           : "Eintrag konnte nicht gelöscht werden.",
       );
     } finally {
-      setTodoPending(todo.id, false);
+      setTaskPending(task.id, false);
     }
   }
 
@@ -219,51 +219,51 @@ export function CentralPanel() {
         ) : null}
 
         {!isLoading
-          ? todos.map((todo) => (
+          ? tasks.map((task) => (
             <div
-              key={todo.id}
+              key={task.id}
               className={`group flex items-center gap-3 rounded-2xl bg-white/34 px-3 py-3 transition hover:bg-white/52 ${
-                todo.completed ? "opacity-60" : ""
+                task.completed ? "opacity-60" : ""
               }`}
             >
               <button
                 type="button"
                 className={`grid size-9 shrink-0 place-items-center rounded-xl border transition ${
-                  todo.completed
+                  task.completed
                     ? "border-success bg-success text-white"
                     : "border-line bg-panel text-muted hover:border-accent"
                 }`}
                 aria-label={
-                  todo.completed
+                  task.completed
                     ? "Eintrag als offen markieren"
                     : "Eintrag abschließen"
                 }
                 title={
-                  todo.completed
+                  task.completed
                     ? "Eintrag als offen markieren"
                     : "Eintrag abschließen"
                 }
-                disabled={pendingIds.has(todo.id)}
-                onClick={() => void handleToggleTodo(todo)}
+                disabled={pendingIds.has(task.id)}
+                onClick={() => void handleToggleTask(task)}
               >
-                {todo.completed ? <Check size={17} aria-hidden="true" /> : null}
+                {task.completed ? <Check size={17} aria-hidden="true" /> : null}
               </button>
               <p
                 className={`min-w-0 flex-1 text-sm leading-6 ${
-                  todo.completed
+                  task.completed
                     ? "text-muted line-through decoration-accent-strong/45"
                     : "text-foreground"
                 }`}
               >
-                {todo.text}
+                {task.text}
               </p>
               <button
                 type="button"
                 className="grid size-9 shrink-0 place-items-center rounded-xl text-muted opacity-0 transition hover:bg-panel-soft hover:text-accent-strong focus:opacity-100 group-hover:opacity-100"
                 aria-label="Eintrag löschen"
                 title="Eintrag löschen"
-                disabled={pendingIds.has(todo.id)}
-                onClick={() => void handleDeleteTodo(todo)}
+                disabled={pendingIds.has(task.id)}
+                onClick={() => void handleDeleteTask(task)}
               >
                 <Trash2 size={17} aria-hidden="true" />
               </button>

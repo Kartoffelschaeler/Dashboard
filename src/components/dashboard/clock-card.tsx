@@ -2,7 +2,8 @@
 
 import { CalendarDays } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { CalendarModal } from "@/components/calendar-modal";
+import { CalendarModal } from "@/components/calendar/calendar-modal";
+import { useDashboard } from "@/components/dashboard/dashboard-context";
 
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat("de-DE", {
@@ -21,11 +22,8 @@ function formatTime(date: Date) {
   }).format(date);
 }
 
-type ClockCardProps = {
-  isUnlocked: boolean;
-};
-
-export function ClockCard({ isUnlocked }: ClockCardProps) {
+export function ClockCard() {
+  const { isUnlocked } = useDashboard();
   const [now, setNow] = useState(() => new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 

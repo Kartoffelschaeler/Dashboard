@@ -1,12 +1,12 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { CalendarEvent } from "@/lib/calendar-types";
-import type { Todo } from "@/lib/types";
+import type { CalendarEvent } from "@/types/calendar";
+import type { Task } from "@/types/task";
 
 type Database = {
   public: {
     Tables: {
       todos: {
-        Row: Todo;
+        Row: Task;
         Insert: {
           id?: string;
           text: string;

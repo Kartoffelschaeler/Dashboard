@@ -1,77 +1,109 @@
 # Personal Dashboard
 
-Minimalistisches persönliches Dashboard mit Next.js App Router, TypeScript, Tailwind CSS und Supabase.
+Minimalistisches persönliches Dashboard mit Next.js App Router, TypeScript, Tailwind CSS und Supabase. Die App ist jetzt so strukturiert, dass ein späterer KI-Agent dieselben Services nutzen kann wie die UI.
 
-## Lokal starten
-
-1. Abhängigkeiten installieren:
+## Lokal Starten
 
 ```bash
 npm install
-```
-
-2. Supabase-Projekt anlegen und das Schema aus `supabase/schema.sql` ausführen.
-
-3. Umgebungsvariablen kopieren:
-
-```bash
 cp .env.example .env.local
-```
-
-4. Umgebungsvariablen in `.env.local` eintragen:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-DASHBOARD_PASSWORD=change-me
-```
-
-5. Entwicklungsserver starten:
-
-```bash
 npm run dev
 ```
 
 Die App läuft danach unter `http://localhost:3000`.
 
-## Geschützte Bereiche
+## Environment
 
-Die Website bleibt öffentlich sichtbar. Uhrzeit, Datum, Layout und der KI-Chat-Platzhalter sind frei zugänglich.
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+DASHBOARD_PASSWORD=change-me
 
-Persönliche Bereiche wie Zentrale, Kalender und spätere private Daten werden erst nach Eingabe von `DASHBOARD_PASSWORD` angezeigt. Der entsperrte Zustand wird nur lokal im Browser gespeichert.
+AGENT_ENABLED=false
+AGENT_MODEL=
+OPENAI_API_KEY=
+```
 
-Dieser Schutz ist für ein persönliches Dashboard gedacht und ersetzt kein vollständiges Benutzerkonto mit Authentifizierung.
+`OPENAI_API_KEY`, `AGENT_ENABLED` und `AGENT_MODEL` sind nur vorbereitet und werden noch nicht verwendet. Sie dürfen nicht als `NEXT_PUBLIC_` Variablen angelegt werden.
 
-## Dashboard-Struktur
+## Struktur
 
-Das Dashboard bleibt bewusst reduziert:
+```txt
+src/components
+  calendar
+  chat
+  dashboard
+  tasks
+
+src/lib
+  agent
+    memory
+    tools
+  config
+  services
+  utils
+
+src/types
+```
+
+Das Dashboard bleibt ruhig und fokussiert:
 
 - links: Zeit, Datum und Kalender-Icon
-- rechts: Zentrale
-- darunter: KI-Chat-Platzhalter
+- rechts: Zentrale für Aufgaben und kurze Einträge
+- darunter: vorbereiteter Chat-Platzhalter
+- Kalender nur als Modal über das Icon
 
-Die Zentrale nutzt aktuell weiterhin die bestehende `todos` Tabelle. Sie ist als späterer KI-Ausgabebereich vorbereitet, zum Beispiel für Hausaufgaben, Abgaben, Erinnerungen, kurze Notizen und persönliche Aufgaben. Eine spätere Migration auf eine allgemeinere `dashboard_items` Tabelle ist vorgesehen, aber noch nicht nötig.
+## Services
 
-## Kalender
+Alle Datenoperationen laufen über Services:
 
-Der Kalender ist kein dauerhaftes Dashboard-Panel mehr. Nach dem Entsperren öffnet das Kalender-Icon in der Zeitkarte ein ruhiges Modal:
+- `src/lib/services/task-service.ts`
+  - `getTasks`
+  - `createTask`
+  - `toggleTask`
+  - `deleteTask`
+- `src/lib/services/calendar-service.ts`
+  - `getEvents`
+  - `createEvent`
+  - `deleteEvent`
 
-- Monatsansicht mit Navigation
-- heutiger Tag deutlich markiert
-- Tage mit Terminen zeigen kleine Punkte
-- Tagesdetails erscheinen erst nach Klick auf einen Tag
-- Termine können im Detailbereich geöffnet und gelöscht werden
-- neue Termine werden über den kleinen Plus-Button im Modal erstellt
+Komponenten sprechen nicht direkt mit Supabase. Ein späterer Agent soll ebenfalls diese Services verwenden.
 
-Die Kalenderlogik ist für spätere KI-Agenten vorbereitet:
+## Agent-Vorbereitung
 
-- `src/lib/calendar-types.ts` enthält die Termin-Typen
-- `src/lib/calendar-utils.ts` enthält Datumsraster, Filter und Formatierung
-- `src/lib/calendar-service.ts` kapselt Laden, Erstellen und Löschen über Supabase
+Noch keine echte KI ist eingebaut. Vorbereitet sind:
 
-## Supabase Schema
+- `src/lib/agent/tools/create-task-tool.ts`
+- `src/lib/agent/tools/create-event-tool.ts`
+- `src/lib/agent/tools/get-open-tasks-tool.ts`
+- `src/lib/agent/tools/get-upcoming-events-tool.ts`
+- `src/lib/agent/memory/agent-memory.ts`
+- `src/lib/agent/memory/conversation-store.ts`
 
-Das vollständige lokale Schema liegt in `supabase/schema.sql`. Für den Kalender wird diese Tabelle benötigt:
+Der spätere Agent soll nicht getrennt vom Dashboard arbeiten, sondern diese Tools nutzen, um Aufgaben und Termine über dieselbe Datenlogik zu lesen oder zu verändern.
+
+## Typen
+
+Zentrale Typen liegen in `src/types`:
+
+- `Task`
+- `CalendarEvent`
+- `DashboardItem`
+- `AgentAction`
+- `ChatMessage`
+
+Die Zentrale nutzt aktuell weiterhin die bestehende `todos` Tabelle. Eine spätere Migration auf `dashboard_items` ist vorbereitet, aber noch nicht notwendig.
+
+## Supabase
+
+Das vollständige Schema liegt in `supabase/schema.sql`.
+
+Aktuell verwendet:
+
+- `todos`
+- `calendar_events`
+
+Kalender-Tabelle:
 
 ```sql
 create table if not exists public.calendar_events (
@@ -85,16 +117,4 @@ create table if not exists public.calendar_events (
 );
 ```
 
-Row Level Security ist aktiviert. Das Schema enthält einfache Policies für Lesen, Erstellen und Löschen mit dem Supabase Anon Key. Der Dashboard-Zugriff wird zusätzlich über das lokale Passwort-Unlock gesteuert.
-
-## Environment Variables
-
-Diese Variablen werden lokal in `.env.local` benötigt:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-DASHBOARD_PASSWORD=change-me
-```
-
-`NEXT_PUBLIC_SUPABASE_URL` und `NEXT_PUBLIC_SUPABASE_ANON_KEY` werden für Todos und Kalender verwendet. `DASHBOARD_PASSWORD` schützt die persönlichen Bereiche im Dashboard.
+Row Level Security ist aktiviert. Die App schützt persönliche Bereiche zusätzlich über das lokale Passwort-Unlock.

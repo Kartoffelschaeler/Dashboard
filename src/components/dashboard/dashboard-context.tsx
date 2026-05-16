@@ -1,13 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ChatPlaceholder } from "@/components/chat-placeholder";
-import { ClockCard } from "@/components/clock-card";
-import { ProtectedSection } from "@/components/protected-section";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import type { ReactNode } from "react";
+
+type DashboardContextValue = {
+  error: string | null;
+  hasLoadedState: boolean;
+  isChecking: boolean;
+  isUnlocked: boolean;
+  unlock: (password: string) => Promise<void>;
+};
 
 const storageKey = "dashboard-unlocked";
+const DashboardContext = createContext<DashboardContextValue | null>(null);
 
-export function DashboardShell() {
+export function DashboardProvider({ children }: { children: ReactNode }) {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [hasLoadedState, setHasLoadedState] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +36,7 @@ export function DashboardShell() {
     return () => window.clearTimeout(timeoutId);
   }, []);
 
-  async function unlock(password: string) {
+  const unlock = useCallback(async (password: string) => {
     if (!password || isChecking) {
       return;
     }
@@ -56,24 +70,32 @@ export function DashboardShell() {
     } finally {
       setIsChecking(false);
     }
-  }
+  }, [isChecking]);
+
+  const value = useMemo(
+    () => ({
+      error,
+      hasLoadedState,
+      isChecking,
+      isUnlocked,
+      unlock,
+    }),
+    [error, hasLoadedState, isChecking, isUnlocked, unlock],
+  );
 
   return (
-    <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto grid w-full max-w-6xl gap-5">
-        <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-          <ClockCard isUnlocked={isUnlocked} />
-          <ProtectedSection
-            error={error}
-            hasLoadedState={hasLoadedState}
-            isChecking={isChecking}
-            isUnlocked={isUnlocked}
-            onUnlock={unlock}
-          />
-        </section>
-
-        <ChatPlaceholder />
-      </div>
-    </main>
+    <DashboardContext.Provider value={value}>
+      {children}
+    </DashboardContext.Provider>
   );
+}
+
+export function useDashboard() {
+  const context = useContext(DashboardContext);
+
+  if (!context) {
+    throw new Error("useDashboard must be used inside DashboardProvider.");
+  }
+
+  return context;
 }

@@ -1,8 +1,13 @@
-export type Todo = {
-  id: string;
-  text: string;
-  completed: boolean;
-  created_at: string;
-};
-
-export type { CalendarEvent } from "@/lib/calendar-types";
+export type { Task as Todo } from "@/types/task";
+export type { CalendarEvent } from "@/types/calendar";
+export type {
+  AgentAction,
+  AgentToolMap,
+  AgentToolResult,
+  CalendarDay,
+  CreateCalendarEventInput,
+  DashboardItem,
+  DashboardItemSource,
+  DashboardItemType,
+  Task,
+} from "@/types";

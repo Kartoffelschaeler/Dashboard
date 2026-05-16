@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Personal Dashboard",
-  description: "Ein ruhiges persönliches Dashboard mit Todo-Liste.",
+  description: "Ein ruhiges persönliches Dashboard mit Zentrale und Kalender.",
 };
 
 export default function RootLayout({
