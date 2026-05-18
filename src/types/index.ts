@@ -19,3 +19,8 @@ export type {
   GoogleCalendar,
   GoogleCalendarEvent,
 } from "@/types/google-calendar";
+export type {
+  AgentMemory,
+  AgentMemoryType,
+  CreateAgentMemoryInput,
+} from "@/types/memory";

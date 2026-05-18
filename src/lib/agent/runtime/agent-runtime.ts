@@ -1,5 +1,6 @@
 import { buildSystemPrompt } from "@/lib/agent/runtime/build-system-prompt";
 import { agentPolicy } from "@/lib/agent/runtime/agent-policy";
+import { createAgentRuntimeContext } from "@/lib/agent/runtime/agent-context";
 import {
   executeToolCall,
   type ExecutedToolCall,
@@ -86,8 +87,8 @@ function parseModelResponse(content: string): AgentModelResponse | null {
   return null;
 }
 
-function buildToolListForPrompt() {
-  return [...getToolRegistry().values()]
+function buildToolListForPrompt(registry: ReturnType<typeof getToolRegistry>) {
+  return [...registry.values()]
     .map(
       (tool) =>
         `- ${tool.name}: ${tool.description} Schema: ${JSON.stringify(
@@ -111,11 +112,25 @@ async function askModel(messages: OllamaChatMessage[]) {
 export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
   const toolCalls: ExecutedToolCall[] = [];
   const warnings: string[] = [];
-  const registry = getToolRegistry();
+  const runtimeContext = createAgentRuntimeContext(input.conversationId ?? null, [
+    "system.getCurrentDate",
+    "tasks.getOpenTasks",
+    "tasks.createTask",
+    "calendar.getUpcomingEvents",
+    "calendar.createEvent",
+    "memory.search",
+    "memory.remember",
+    "memory.list",
+  ]);
+  const registry = getToolRegistry(runtimeContext);
+  console.info("Agent request date context", {
+    dateIso: runtimeContext.currentDate.dateIso,
+    timezone: runtimeContext.timezone,
+  });
   const messages: OllamaChatMessage[] = [
     {
       role: "system",
-      content: `${buildSystemPrompt()}\n\nVerfügbare Tools:\n${buildToolListForPrompt()}`,
+      content: `${buildSystemPrompt(runtimeContext)}\n\nVerfügbare Tools:\n${buildToolListForPrompt(registry)}`,
     },
     ...normalizeHistory(input.messages),
     {

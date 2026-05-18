@@ -8,7 +8,7 @@ import {
   X,
 } from "lucide-react";
 import { createPortal } from "react-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import {
   createEvent,
@@ -34,10 +34,20 @@ import {
   weekDayLabels,
 } from "@/lib/utils/calendar-utils";
 import { getCalendarColor } from "@/lib/utils/calendar-colors";
+import { useDashboard } from "@/components/dashboard/dashboard-context";
 
 type CalendarModalProps = {
   onClose: () => void;
 };
+
+type CalendarEventDot = {
+  id: string;
+  color: string;
+  calendarId?: string;
+  source: CalendarDisplayEvent["source"];
+};
+
+const calendarCacheMaxAgeMs = 2 * 60 * 1000;
 
 function sortEvents(events: CalendarDisplayEvent[]) {
   return [...events].sort(
@@ -106,14 +116,19 @@ function googleEventToDisplayEvent(
   };
 }
 
-function getDayEventDots(events: CalendarDisplayEvent[]) {
-  const dots = new Map<string, string>();
+function getDayEventDots(events: CalendarDisplayEvent[]): CalendarEventDot[] {
+  const dots = new Map<string, CalendarEventDot>();
 
   events.forEach((event) => {
     const key = `${event.source}:${event.calendarId ?? event.calendarName ?? "local"}`;
 
     if (!dots.has(key)) {
-      dots.set(key, event.calendarColor ?? getCalendarColor());
+      dots.set(key, {
+        id: `${key}:${event.id}`,
+        color: event.calendarColor ?? getCalendarColor(),
+        calendarId: event.calendarId,
+        source: event.source,
+      });
     }
   });
 
@@ -121,11 +136,12 @@ function getDayEventDots(events: CalendarDisplayEvent[]) {
 }
 
 export function CalendarModal({ onClose }: CalendarModalProps) {
+  const { calendarCache, calendarRefreshKey, setCalendarCache } =
+    useDashboard();
   const [visibleMonth, setVisibleMonth] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [selectedEvent, setSelectedEvent] =
     useState<CalendarDisplayEvent | null>(null);
-  const [events, setEvents] = useState<CalendarDisplayEvent[]>([]);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(() => getInputDateValue(new Date()));
@@ -133,7 +149,7 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [googleWarning, setGoogleWarning] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(
     () => new Set(),
@@ -143,10 +159,33 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
     () => buildMonthDays(visibleMonth),
     [visibleMonth],
   );
-  const selectedDateEvents = useMemo(
-    () => getEventsForDay(events, selectedDate),
-    [events, selectedDate],
+  const calendarRange = useMemo(
+    () => getCalendarRange(visibleMonth),
+    [visibleMonth],
   );
+  const calendarRangeKey = useMemo(
+    () =>
+      `${calendarRange.gridStart.toISOString()}_${calendarRange.gridEnd.toISOString()}`,
+    [calendarRange],
+  );
+  const visibleEvents = useMemo(
+    () =>
+      calendarCache.rangeKey === calendarRangeKey ? calendarCache.events : [],
+    [calendarCache, calendarRangeKey],
+  );
+  const selectedDateEvents = useMemo(
+    () => getEventsForDay(visibleEvents, selectedDate),
+    [visibleEvents, selectedDate],
+  );
+  const isBlockingLoading = isLoading && visibleEvents.length === 0;
+  const displayError =
+    error ?? (calendarCache.rangeKey === calendarRangeKey
+      ? calendarCache.error
+      : null);
+  const displayGoogleWarning =
+    googleWarning ?? (calendarCache.rangeKey === calendarRangeKey
+      ? calendarCache.googleWarning
+      : null);
 
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
@@ -161,19 +200,36 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
 
   useEffect(() => {
     let isMounted = true;
-    const { gridStart, gridEnd } = getCalendarRange(visibleMonth);
+    const hasCachedRange = calendarCache.rangeKey === calendarRangeKey;
+    const cacheAge = calendarCache.lastFetchedAt
+      ? Date.now() - calendarCache.lastFetchedAt
+      : Number.POSITIVE_INFINITY;
+    const isFreshCache =
+      hasCachedRange &&
+      calendarCache.lastFetchedAt !== null &&
+      cacheAge < calendarCacheMaxAgeMs;
+    const hasCachedEvents = hasCachedRange && calendarCache.events.length > 0;
+
+    if (isFreshCache) {
+      return () => {
+        isMounted = false;
+      };
+    }
 
     async function loadEvents() {
       try {
-        setIsLoading(true);
+        if (!hasCachedEvents) {
+          setIsLoading(true);
+        }
         setError(null);
-        setGoogleWarning(null);
+        setGoogleWarning(hasCachedRange ? calendarCache.googleWarning : null);
+
         const [loadedEvents, googleResult] = await Promise.all([
-          getEvents(gridStart, gridEnd),
+          getEvents(calendarRange.gridStart, calendarRange.gridEnd),
           fetch(
             `/api/calendar/events?${new URLSearchParams({
-              from: gridStart.toISOString(),
-              to: gridEnd.toISOString(),
+              from: calendarRange.gridStart.toISOString(),
+              to: calendarRange.gridEnd.toISOString(),
             })}`,
           )
             .then(async (response) => {
@@ -205,20 +261,42 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
         ]);
 
         if (isMounted) {
+          const nextEvents = sortEvents([
+            ...loadedEvents.map(localEventToDisplayEvent),
+            ...googleResult.events.map(googleEventToDisplayEvent),
+          ]);
+
           setGoogleWarning(googleResult.warning);
-          setEvents(
-            sortEvents([
-              ...loadedEvents.map(localEventToDisplayEvent),
-              ...googleResult.events.map(googleEventToDisplayEvent),
-            ]),
-          );
+          setCalendarCache({
+            rangeKey: calendarRangeKey,
+            events: nextEvents,
+            lastFetchedAt: Date.now(),
+            error: null,
+            googleWarning: googleResult.warning,
+          });
         }
       } catch (loadError) {
         if (isMounted) {
-          setError(
+          const nextError =
             loadError instanceof Error
               ? loadError.message
-              : "Termine konnten nicht geladen werden.",
+              : "Termine konnten nicht geladen werden.";
+
+          setError(
+            hasCachedEvents
+              ? "Termine konnten nicht aktualisiert werden."
+              : nextError,
+          );
+          setCalendarCache((currentCache) =>
+            currentCache.rangeKey === calendarRangeKey
+              ? {
+                  ...currentCache,
+                  error: hasCachedEvents
+                    ? "Termine konnten nicht aktualisiert werden."
+                    : nextError,
+                  lastFetchedAt: Date.now(),
+                }
+              : currentCache,
           );
         }
       } finally {
@@ -233,7 +311,13 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
     return () => {
       isMounted = false;
     };
-  }, [visibleMonth]);
+  }, [
+    calendarCache,
+    calendarRange,
+    calendarRangeKey,
+    calendarRefreshKey,
+    setCalendarCache,
+  ]);
 
   function openCreateForm() {
     setDate(getInputDateValue(selectedDate));
@@ -247,6 +331,29 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
     setTime("");
     setDescription("");
   }
+
+  const updateVisibleEvents = useCallback(
+    (
+      updater: (
+        currentEvents: CalendarDisplayEvent[],
+      ) => CalendarDisplayEvent[],
+    ) => {
+      setCalendarCache((currentCache) => {
+        const currentEvents =
+          currentCache.rangeKey === calendarRangeKey ? currentCache.events : [];
+        const nextEvents = sortEvents(updater(currentEvents));
+
+        return {
+          ...currentCache,
+          rangeKey: calendarRangeKey,
+          events: nextEvents,
+          error: null,
+          lastFetchedAt: Date.now(),
+        };
+      });
+    },
+    [calendarRangeKey, setCalendarCache],
+  );
 
   function setEventDeleting(id: string, isDeleting: boolean) {
     setPendingDeleteIds((currentIds) => {
@@ -283,9 +390,10 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
         allDay: !time,
       });
 
-      setEvents((currentEvents) =>
-        sortEvents([...currentEvents, localEventToDisplayEvent(createdEvent)]),
-      );
+      updateVisibleEvents((currentEvents) => [
+        ...currentEvents,
+        localEventToDisplayEvent(createdEvent),
+      ]);
       setSelectedDate(startsAt);
       setVisibleMonth(new Date(startsAt.getFullYear(), startsAt.getMonth(), 1));
       closeCreateForm();
@@ -306,7 +414,7 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
     }
 
     setEventDeleting(event.id, true);
-    setEvents((currentEvents) =>
+    updateVisibleEvents((currentEvents) =>
       currentEvents.filter((currentEvent) => currentEvent.id !== event.id),
     );
 
@@ -331,7 +439,7 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
         setSelectedEvent(null);
       }
     } catch (deleteError) {
-      setEvents((currentEvents) => sortEvents([...currentEvents, event]));
+      updateVisibleEvents((currentEvents) => [...currentEvents, event]);
       setError(
         deleteError instanceof Error
           ? deleteError.message
@@ -381,7 +489,7 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
             <button
               type="button"
               onClick={openCreateForm}
-              disabled={isLoading}
+              disabled={isBlockingLoading}
               className="grid size-10 place-items-center rounded-2xl bg-accent text-white shadow-[0_12px_24px_rgba(156,99,62,0.18)] transition hover:bg-accent-strong focus:outline-none focus:ring-2 focus:ring-accent-strong/35 disabled:cursor-not-allowed disabled:opacity-55"
               aria-label="Termin hinzufügen"
               title="Termin hinzufügen"
@@ -400,15 +508,15 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
           </div>
         </div>
 
-        {error ? (
+        {displayError ? (
           <div className="mt-4 rounded-2xl bg-panel-soft/70 px-4 py-3 text-sm leading-6 text-accent-strong">
-            {error}
+            {displayError}
           </div>
         ) : null}
 
-        {!error && googleWarning ? (
+        {!displayError && displayGoogleWarning ? (
           <div className="mt-4 rounded-2xl bg-panel-soft/50 px-4 py-3 text-xs leading-5 text-muted">
-            {googleWarning}
+            {displayGoogleWarning}
           </div>
         ) : null}
 
@@ -427,7 +535,7 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
 
             <div className="mt-2 grid grid-cols-7 gap-1">
               {monthDays.map((day) => {
-                const dayEvents = getEventsForDay(events, day.date);
+                const dayEvents = getEventsForDay(visibleEvents, day.date);
                 const eventDots = getDayEventDots(dayEvents);
                 const isSelected = getDateKey(selectedDate) === day.key;
 
@@ -456,12 +564,12 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
                       {day.dayOfMonth}
                     </span>
                     <span className="mt-1 flex h-2 items-center justify-center gap-1">
-                      {!isLoading
-                        ? eventDots.map((color) => (
+                      {!isBlockingLoading
+                        ? eventDots.map((dot, dotIndex) => (
                           <span
-                            key={color}
+                            key={`${dot.source}-${dot.calendarId ?? "local"}-${dot.id}-${dotIndex}`}
                             className="size-1.5 rounded-full"
-                            style={{ backgroundColor: color }}
+                            style={{ backgroundColor: dot.color }}
                           />
                         ))
                         : null}
@@ -486,7 +594,7 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
               <button
                 type="button"
                 onClick={openCreateForm}
-                disabled={isLoading}
+                disabled={isBlockingLoading}
                 className="grid size-9 place-items-center rounded-xl text-muted transition hover:bg-panel hover:text-accent-strong focus:outline-none focus:ring-2 focus:ring-accent/25 disabled:cursor-not-allowed disabled:opacity-55"
                 aria-label="Termin an diesem Tag hinzufügen"
                 title="Termin an diesem Tag hinzufügen"
@@ -496,20 +604,20 @@ export function CalendarModal({ onClose }: CalendarModalProps) {
             </div>
 
             <div className="mt-4 space-y-2">
-              {isLoading ? (
+              {isBlockingLoading ? (
                 <>
                   <div className="h-14 rounded-2xl bg-white/34" />
                   <div className="h-14 rounded-2xl bg-white/24" />
                 </>
               ) : null}
 
-              {!isLoading && selectedDateEvents.length === 0 ? (
+              {!isBlockingLoading && selectedDateEvents.length === 0 ? (
                 <div className="rounded-2xl bg-white/24 px-4 py-5 text-sm text-muted">
                   Keine Termine.
                 </div>
               ) : null}
 
-              {!isLoading
+              {!isBlockingLoading
                 ? selectedDateEvents.map((calendarEvent) => (
                   <button
                     type="button"

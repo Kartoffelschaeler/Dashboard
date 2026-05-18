@@ -38,6 +38,18 @@ create table if not exists public.agent_action_logs (
   created_at timestamp with time zone default now()
 );
 
+create table if not exists public.agent_memories (
+  id uuid primary key default gen_random_uuid(),
+  content text not null,
+  type text not null default 'preference',
+  confidence numeric default 0.8,
+  source text default 'user',
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now(),
+  last_used_at timestamp with time zone,
+  archived boolean default false
+);
+
 do $$
 begin
   if exists (
@@ -81,6 +93,8 @@ alter table public.calendar_connections enable row level security;
 
 alter table public.agent_action_logs enable row level security;
 
+alter table public.agent_memories enable row level security;
+
 drop policy if exists "Allow public read access" on public.todos;
 drop policy if exists "Allow public insert access" on public.todos;
 drop policy if exists "Allow public update access" on public.todos;
@@ -89,3 +103,4 @@ drop policy if exists "Allow public calendar read access" on public.calendar_eve
 drop policy if exists "Allow public calendar insert access" on public.calendar_events;
 drop policy if exists "Allow public calendar delete access" on public.calendar_events;
 drop policy if exists "Allow public connection read access" on public.calendar_connections;
+drop policy if exists "Allow public memory read access" on public.agent_memories;

@@ -2,6 +2,8 @@
 
 import {
   createContext,
+  type Dispatch,
+  type SetStateAction,
   useCallback,
   useContext,
   useEffect,
@@ -9,18 +11,40 @@ import {
   useState,
 } from "react";
 import type { ReactNode } from "react";
+import type { CalendarDisplayEvent } from "@/types/calendar";
+
+type CalendarCache = {
+  rangeKey: string | null;
+  events: CalendarDisplayEvent[];
+  lastFetchedAt: number | null;
+  error: string | null;
+  googleWarning: string | null;
+};
 
 type DashboardContextValue = {
+  calendarCache: CalendarCache;
   error: string | null;
   hasLoadedState: boolean;
   isChecking: boolean;
   isLocalMode: boolean;
   isUnlocked: boolean;
+  calendarRefreshKey: number;
+  refreshCalendar: () => void;
+  refreshTasks: () => void;
+  setCalendarCache: Dispatch<SetStateAction<CalendarCache>>;
+  taskRefreshKey: number;
   lock: () => Promise<void>;
   unlock: (password: string) => Promise<void>;
 };
 
 const storageKey = "dashboard-unlocked";
+const emptyCalendarCache: CalendarCache = {
+  rangeKey: null,
+  events: [],
+  lastFetchedAt: null,
+  error: null,
+  googleWarning: null,
+};
 const DashboardContext = createContext<DashboardContextValue | null>(null);
 
 export function DashboardProvider({ children }: { children: ReactNode }) {
@@ -29,6 +53,10 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(false);
   const [isLocalMode, setIsLocalMode] = useState(false);
+  const [taskRefreshKey, setTaskRefreshKey] = useState(0);
+  const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
+  const [calendarCache, setCalendarCache] =
+    useState<CalendarCache>(emptyCalendarCache);
 
   useEffect(() => {
     let isMounted = true;
@@ -110,19 +138,52 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     await fetch("/api/auth/lock", { method: "POST" });
     window.localStorage.setItem(storageKey, "false");
     setIsUnlocked(false);
+    setCalendarCache(emptyCalendarCache);
+  }, []);
+
+  const refreshTasks = useCallback(() => {
+    setTaskRefreshKey((currentKey) => currentKey + 1);
+  }, []);
+
+  const refreshCalendar = useCallback(() => {
+    setCalendarCache((currentCache) => ({
+      ...currentCache,
+      lastFetchedAt: null,
+    }));
+    setCalendarRefreshKey((currentKey) => currentKey + 1);
   }, []);
 
   const value = useMemo(
     () => ({
+      calendarCache,
+      calendarRefreshKey,
       error,
       hasLoadedState,
       isChecking,
       isLocalMode,
       isUnlocked,
       lock,
+      refreshCalendar,
+      refreshTasks,
+      setCalendarCache,
+      taskRefreshKey,
       unlock,
     }),
-    [error, hasLoadedState, isChecking, isLocalMode, isUnlocked, lock, unlock],
+    [
+      calendarCache,
+      calendarRefreshKey,
+      error,
+      hasLoadedState,
+      isChecking,
+      isLocalMode,
+      isUnlocked,
+      lock,
+      refreshCalendar,
+      refreshTasks,
+      setCalendarCache,
+      taskRefreshKey,
+      unlock,
+    ],
   );
 
   return (

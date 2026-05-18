@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { CalendarEvent } from "@/types/calendar";
 import type { CalendarConnection } from "@/types/google-calendar";
+import type { AgentMemory } from "@/types/memory";
 import type { Task } from "@/types/task";
 
 type Database = {
@@ -96,6 +97,32 @@ type Database = {
         };
         Relationships: [];
       };
+      agent_memories: {
+        Row: AgentMemory;
+        Insert: {
+          id?: string;
+          content: string;
+          type?: AgentMemory["type"];
+          confidence?: number;
+          source?: string;
+          created_at?: string;
+          updated_at?: string;
+          last_used_at?: string | null;
+          archived?: boolean;
+        };
+        Update: {
+          id?: string;
+          content?: string;
+          type?: AgentMemory["type"];
+          confidence?: number;
+          source?: string;
+          created_at?: string;
+          updated_at?: string;
+          last_used_at?: string | null;
+          archived?: boolean;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -106,6 +133,14 @@ type Database = {
 
 let supabase: SupabaseClient<Database> | null = null;
 let serverSupabase: SupabaseClient<Database> | null = null;
+
+function normalizeSupabaseUrl(url: string) {
+  return url
+    .trim()
+    .replace(/\/rest\/v1\/?$/, "")
+    .replace(/\/auth\/v1\/?$/, "")
+    .replace(/\/+$/, "");
+}
 
 export function isSupabaseConfigured() {
   return Boolean(
@@ -126,7 +161,7 @@ export function getSupabase() {
     return null;
   }
 
-  supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  supabase = createClient(normalizeSupabaseUrl(supabaseUrl), supabaseAnonKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -148,12 +183,16 @@ export function getServerSupabase() {
     return null;
   }
 
-  serverSupabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
+  serverSupabase = createClient(
+    normalizeSupabaseUrl(supabaseUrl),
+    serviceRoleKey,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
     },
-  });
+  );
 
   return serverSupabase;
 }

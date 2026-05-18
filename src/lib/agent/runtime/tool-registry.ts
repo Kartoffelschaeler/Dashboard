@@ -4,7 +4,14 @@ import {
   createGoogleEvent,
   getGoogleEventsWithWarnings,
 } from "@/lib/services/google-calendar-service";
-import { agentPolicy, type AgentToolRiskLevel } from "@/lib/agent/runtime/agent-policy";
+import {
+  createMemory,
+  getRelevantMemories,
+  listMemories,
+} from "@/lib/services/memory-service";
+import type { AgentToolRiskLevel } from "@/lib/agent/runtime/agent-policy";
+import type { AgentRuntimeContext } from "@/lib/agent/runtime/agent-context";
+import type { AgentMemoryType } from "@/types/memory";
 
 type JsonSchema = {
   type: "object";
@@ -12,6 +19,15 @@ type JsonSchema = {
   required?: string[];
   additionalProperties?: boolean;
 };
+
+const memoryTypes = new Set<AgentMemoryType>([
+  "fact",
+  "instruction",
+  "personal_context",
+  "preference",
+  "project",
+  "study",
+]);
 
 export type AgentToolDefinition<TInput = unknown> = {
   name: string;
@@ -71,6 +87,31 @@ function assertOptionalBoolean(input: Record<string, unknown>, key: string) {
   return value;
 }
 
+function assertOptionalNumber(
+  input: Record<string, unknown>,
+  key: string,
+): number | undefined {
+  const value = input[key];
+
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    throw new Error("INVALID_INPUT");
+  }
+
+  return value;
+}
+
+function normalizeMemoryType(type: string | null): AgentMemoryType {
+  if (type && memoryTypes.has(type as AgentMemoryType)) {
+    return type as AgentMemoryType;
+  }
+
+  return "preference";
+}
+
 function parseDateRange(input: unknown) {
   const object = assertObject(input);
   const now = new Date();
@@ -87,7 +128,7 @@ function parseDateRange(input: unknown) {
   return { from, to };
 }
 
-export function getToolRegistry() {
+export function getToolRegistry(context: AgentRuntimeContext) {
   const tools: AgentToolDefinition[] = [
     {
       name: "system.getCurrentDate",
@@ -100,20 +141,7 @@ export function getToolRegistry() {
       riskLevel: "low",
       requiresConfirmation: false,
       handler: async () => {
-        const now = new Date();
-
-        return {
-          timezone: agentPolicy.timezone,
-          iso: now.toISOString(),
-          date: new Intl.DateTimeFormat("de-DE", {
-            dateStyle: "full",
-            timeZone: agentPolicy.timezone,
-          }).format(now),
-          time: new Intl.DateTimeFormat("de-DE", {
-            timeStyle: "short",
-            timeZone: agentPolicy.timezone,
-          }).format(now),
-        };
+        return context.currentDate;
       },
     },
     {
@@ -169,11 +197,13 @@ export function getToolRegistry() {
         properties: {
           from: {
             type: "string",
-            description: "ISO Startzeit. Optional, Standard ist jetzt.",
+            description:
+              "Konkrete ISO Startzeit auf Basis des aktuellen Datums im System Prompt. Optional, Standard ist jetzt.",
           },
           to: {
             type: "string",
-            description: "ISO Endzeit. Optional, Standard ist in 30 Tagen.",
+            description:
+              "Konkrete ISO Endzeit auf Basis des aktuellen Datums im System Prompt. Optional, Standard ist in 30 Tagen.",
           },
         },
         additionalProperties: false,
@@ -208,11 +238,13 @@ export function getToolRegistry() {
           description: { type: "string", description: "Optionale Beschreibung." },
           startDate: {
             type: "string",
-            description: "ISO Startzeit oder Datum.",
+            description:
+              "Konkrete ISO Startzeit oder Datum auf Basis des aktuellen Datums im System Prompt.",
           },
           endDate: {
             type: "string",
-            description: "Optionale ISO Endzeit oder exklusives Ganztags-Enddatum.",
+            description:
+              "Optionale konkrete ISO Endzeit oder exklusives Ganztags-Enddatum.",
           },
           allDay: {
             type: "boolean",
@@ -239,6 +271,103 @@ export function getToolRegistry() {
           endDate,
           allDay,
         });
+      },
+    },
+    {
+      name: "memory.search",
+      description:
+        "Sucht stabile persönliche Informationen, Vorlieben und Kontext. Nicht fuer Termine oder Aufgaben verwenden.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Kurzer Suchtext fuer relevante Memories.",
+          },
+          type: {
+            type: "string",
+            description:
+              "Optional: preference, fact, project, study, instruction oder personal_context.",
+          },
+          limit: {
+            type: "number",
+            description: "Optional, maximal 8.",
+          },
+        },
+        additionalProperties: false,
+      },
+      riskLevel: "low",
+      requiresConfirmation: false,
+      handler: async (input) => {
+        const object = assertObject(input);
+        const query = assertOptionalString(object, "query");
+        const type = assertOptionalString(object, "type");
+        const limit = assertOptionalNumber(object, "limit");
+
+        return getRelevantMemories({ limit, query, type });
+      },
+    },
+    {
+      name: "memory.remember",
+      description:
+        "Speichert eine stabile persönliche Information nur auf ausdruecklichen Nutzerwunsch. Keine Termine, Aufgaben oder Secrets speichern.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          content: {
+            type: "string",
+            description: "Die dauerhaft zu merkende Information.",
+            maxLength: 500,
+          },
+          type: {
+            type: "string",
+            description:
+              "preference, fact, project, study, instruction oder personal_context.",
+          },
+          confidence: {
+            type: "number",
+            description: "Optionale Sicherheit zwischen 0 und 1.",
+          },
+        },
+        required: ["content"],
+        additionalProperties: false,
+      },
+      riskLevel: "medium",
+      requiresConfirmation: false,
+      handler: async (input) => {
+        const object = assertObject(input);
+        const content = assertString(object, "content");
+        const type = assertOptionalString(object, "type");
+        const confidence = assertOptionalNumber(object, "confidence");
+
+        return createMemory({
+          content,
+          confidence,
+          type: normalizeMemoryType(type),
+        });
+      },
+    },
+    {
+      name: "memory.list",
+      description:
+        "Listet gespeicherte Memories nur auf explizite Nutzerfrage.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          limit: {
+            type: "number",
+            description: "Optional, maximal 50.",
+          },
+        },
+        additionalProperties: false,
+      },
+      riskLevel: "low",
+      requiresConfirmation: false,
+      handler: async (input) => {
+        const object = assertObject(input);
+        const limit = assertOptionalNumber(object, "limit");
+
+        return listMemories(limit);
       },
     },
   ];

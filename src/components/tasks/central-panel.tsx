@@ -9,6 +9,7 @@ import {
   getTasks,
   toggleTask,
 } from "@/lib/services/task-service";
+import { useDashboard } from "@/components/dashboard/dashboard-context";
 import type { Task } from "@/types/task";
 
 function sortTasks(tasks: Task[]) {
@@ -22,6 +23,7 @@ function sortTasks(tasks: Task[]) {
 export function CentralPanel() {
   // The Zentrale still uses the existing todos table. A future dashboard_items
   // service can replace this data layer without changing the panel behavior.
+  const { taskRefreshKey } = useDashboard();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newItem, setNewItem] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +63,7 @@ export function CentralPanel() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [taskRefreshKey]);
 
   function setTaskPending(id: string, isPending: boolean) {
     setPendingIds((currentIds) => {

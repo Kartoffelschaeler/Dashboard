@@ -5,4 +5,7 @@ export { deleteCalendarEventTool } from "@/lib/agent/tools/delete-calendar-event
 export { getCalendarEventsTool } from "@/lib/agent/tools/get-calendar-events-tool";
 export { getOpenTasksTool } from "@/lib/agent/tools/get-open-tasks-tool";
 export { getUpcomingEventsTool } from "@/lib/agent/tools/get-upcoming-events-tool";
+export { memoryListTool } from "@/lib/agent/tools/memory-list-tool";
+export { memoryRememberTool } from "@/lib/agent/tools/memory-remember-tool";
+export { memorySearchTool } from "@/lib/agent/tools/memory-search-tool";
 export { updateCalendarEventTool } from "@/lib/agent/tools/update-calendar-event-tool";

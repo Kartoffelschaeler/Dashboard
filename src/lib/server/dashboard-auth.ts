@@ -6,7 +6,7 @@ export const dashboardSessionMaxAge = 60 * 60 * 12;
 export function isLocalAuthDisabled() {
   return (
     process.env.NODE_ENV === "development" &&
-    process.env.LOCAL_AUTH_DISABLED === "true"
+    process.env.LOCAL_AUTH_DISABLED?.trim().toLowerCase() === "true"
   );
 }
 

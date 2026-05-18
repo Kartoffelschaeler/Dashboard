@@ -8,13 +8,14 @@ import { useMemo, useState } from "react";
 
 type AgentResponse = {
   assistantMessage?: string;
+  executedTools?: Array<{ status?: string; success: boolean; toolName: string }>;
   toolCalls?: Array<{ name: string; status: string }>;
   warnings?: string[];
   error?: string;
 };
 
 export function ChatLayout() {
-  const { isUnlocked } = useDashboard();
+  const { isUnlocked, refreshCalendar, refreshTasks } = useDashboard();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +60,33 @@ export function ChatLayout() {
 
       if (!response.ok || data.error) {
         throw new Error(data.error ?? "Agent konnte nicht antworten.");
+      }
+
+      const executedTools =
+        data.executedTools ??
+        data.toolCalls?.map((toolCall) => ({
+          toolName: toolCall.name,
+          success: toolCall.status === "success",
+          status: toolCall.status,
+        })) ??
+        [];
+
+      if (
+        executedTools.some(
+          (toolCall) =>
+            toolCall.toolName === "tasks.createTask" && toolCall.success,
+        )
+      ) {
+        refreshTasks();
+      }
+
+      if (
+        executedTools.some(
+          (toolCall) =>
+            toolCall.toolName === "calendar.createEvent" && toolCall.success,
+        )
+      ) {
+        refreshCalendar();
       }
 
       setToolCalls(data.toolCalls ?? []);

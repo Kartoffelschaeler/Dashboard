@@ -5,6 +5,12 @@ async function readJson<TData>(response: Response): Promise<TData> {
   const data = (await response.json()) as TData & { error?: string };
 
   if (!response.ok) {
+    if (response.status === 401) {
+      throw createServiceError(
+        "Dashboard ist gesperrt. Prüfe LOCAL_AUTH_DISABLED=true oder entsperre das Dashboard.",
+      );
+    }
+
     throw createServiceError(data.error ?? "Aktion fehlgeschlagen.");
   }
 

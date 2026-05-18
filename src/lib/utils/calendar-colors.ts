@@ -1,16 +1,16 @@
 import type { CalendarEventSource } from "@/types/calendar";
 
-const localCalendarColor = "#8aa07a";
-const agentCalendarColor = "#b98269";
+const localCalendarColor = "#7f9f80";
+const agentCalendarColor = "#c1869a";
 const googleCalendarColors = [
-  "#c79274",
-  "#b7a16f",
-  "#8fae96",
-  "#7fa7ad",
-  "#9d93bb",
-  "#c1869a",
-  "#a9a66f",
-  "#d0a06f",
+  "#d8955f",
+  "#7f9db8",
+  "#b58ac9",
+  "#c8a24f",
+  "#a8755f",
+  "#6f9f9a",
+  "#b46f85",
+  "#8a9a63",
 ];
 
 function hashString(value: string) {

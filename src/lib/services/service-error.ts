@@ -14,7 +14,8 @@ export class ServiceError extends Error {
 }
 
 export function createServiceError(message: string) {
-  const code = message.includes("Supabase ist noch nicht verbunden")
+  const code = message.includes("Supabase ist noch nicht verbunden") ||
+    message.includes("serverseitig nicht konfiguriert")
     ? "missing_configuration"
     : "database_error";
 

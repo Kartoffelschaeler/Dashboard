@@ -32,6 +32,8 @@ AGENT_MODEL=qwen2.5:7b
 
 `SUPABASE_SERVICE_ROLE_KEY` wird nur serverseitig genutzt, um geschützte Dashboard-Daten und Google OAuth Tokens zu speichern. Google Secrets und spätere Agent-Secrets dürfen nicht als `NEXT_PUBLIC_` Variablen angelegt werden.
 
+`NEXT_PUBLIC_SUPABASE_URL` sollte die Supabase Projekt-Basis-URL sein, also `https://...supabase.co`, nicht der REST-Endpunkt mit `/rest/v1`.
+
 Der Agent läuft lokal über Ollama. Es wird kein API-Key benötigt. `OLLAMA_BASE_URL` fällt ohne Angabe auf `http://localhost:11434`, `AGENT_MODEL` auf `qwen2.5:7b`.
 
 Für lokale Entwicklung kann der Passwortschutz übersprungen werden:
@@ -184,6 +186,7 @@ Aktuell verwendet:
 - `calendar_events`
 - `calendar_connections`
 - `agent_action_logs`
+- `agent_memories`
 
 Kalender-Tabelle:
 
@@ -221,6 +224,32 @@ alter table public.calendar_connections enable row level security;
 ```
 
 Agent Tool Calls werden minimal in `agent_action_logs` protokolliert: Tool-Name, Status, Risikostufe und Zeitstempel. Es werden keine Tokens und keine vollständigen Google Responses geloggt.
+
+Agent Memories liegen in `agent_memories`. Memory ist nur fuer stabile persoenliche Informationen, Vorlieben und Kontext gedacht. Aufgaben bleiben in `todos`, Termine bleiben in Kalendern. Memories werden nicht automatisch gespeichert; der Agent nutzt `memory.remember` nur, wenn du es ausdruecklich verlangst, zum Beispiel mit „Merk dir: ...“.
+
+```sql
+create table if not exists public.agent_memories (
+  id uuid primary key default gen_random_uuid(),
+  content text not null,
+  type text not null default 'preference',
+  confidence numeric default 0.8,
+  source text default 'user',
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now(),
+  last_used_at timestamp with time zone,
+  archived boolean default false
+);
+
+alter table public.agent_memories enable row level security;
+```
+
+Aktive Memory-Tools:
+
+- `memory.search` sucht relevante gespeicherte Informationen.
+- `memory.remember` speichert nur auf explizite Nutzeranweisung.
+- `memory.list` listet Memories auf explizite Nachfrage.
+
+Nicht aktiv sind automatisches Memory Writing, Memory Cleanup, Embeddings oder Vektor-Suche. Secrets, Passwoerter, Tokens und API Keys duerfen nicht gespeichert werden.
 
 ## Google Calendar
 

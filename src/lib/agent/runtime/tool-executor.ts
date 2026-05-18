@@ -24,6 +24,14 @@ function normalizeToolError(error: unknown) {
     return "INVALID_INPUT";
   }
 
+  if (message === "MEMORY_CONTAINS_SECRET") {
+    return "MEMORY_CREATE_FAILED";
+  }
+
+  if (message.includes("agent_memories") || message.includes("Memory")) {
+    return "MEMORY_NOT_AVAILABLE";
+  }
+
   if (message.includes("Agent-Kalender")) {
     return "AGENT_CALENDAR_NOT_FOUND";
   }

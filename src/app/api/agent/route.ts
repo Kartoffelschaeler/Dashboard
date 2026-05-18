@@ -29,7 +29,14 @@ export async function POST(request: Request) {
       typeof body.conversationId === "string" ? body.conversationId : null;
     const result = await runAgent({ message, messages, conversationId });
 
-    return Response.json(result);
+    return Response.json({
+      ...result,
+      executedTools: result.toolCalls.map((toolCall) => ({
+        toolName: toolCall.name,
+        success: toolCall.status === "success",
+        status: toolCall.status,
+      })),
+    });
   } catch (error) {
     let message = "Agent konnte gerade nicht antworten.";
 
